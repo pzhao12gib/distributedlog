@@ -18,10 +18,9 @@
 package org.apache.distributedlog.logsegment;
 
 import com.google.common.annotations.Beta;
-import io.netty.buffer.ByteBuf;
-import org.apache.bookkeeper.client.AsyncCallback;
 import org.apache.distributedlog.Entry;
 import org.apache.distributedlog.common.util.Sizable;
+import org.apache.bookkeeper.client.AsyncCallback;
 
 /**
  * An interface class to write the enveloped entry (serialized bytes of
@@ -51,13 +50,16 @@ public interface LogSegmentEntryWriter extends Sizable {
 
     /**
      * Async add entry to the log segment.
-     *
-     *  <p>The implementation semantic follows
+     * <p>The implementation semantic follows
      * {@link org.apache.bookkeeper.client.LedgerHandle#asyncAddEntry(
      * byte[], int, int, AsyncCallback.AddCallback, Object)}
      *
-     * @param entry
+     * @param data
      *          data to add
+     * @param offset
+     *          offset in the data
+     * @param length
+     *          length of the data
      * @param callback
      *          callback
      * @param ctx
@@ -65,6 +67,6 @@ public interface LogSegmentEntryWriter extends Sizable {
      * @see org.apache.bookkeeper.client.LedgerHandle#asyncAddEntry(
      * byte[], int, int, AsyncCallback.AddCallback, Object)
      */
-    void asyncAddEntry(ByteBuf entry,
+    void asyncAddEntry(byte[] data, int offset, int length,
                        AsyncCallback.AddCallback callback, Object ctx);
 }

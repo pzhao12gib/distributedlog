@@ -17,17 +17,13 @@
  */
 package org.apache.distributedlog.tools;
 
-import static com.google.common.base.Charsets.UTF_8;
-import static com.google.common.base.Preconditions.checkArgument;
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
-import io.netty.buffer.ByteBuf;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -50,16 +46,32 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import com.google.common.base.Preconditions;
+import org.apache.distributedlog.BKDistributedLogNamespace;
+import org.apache.distributedlog.Entry;
+import org.apache.distributedlog.api.MetadataAccessor;
+import org.apache.distributedlog.api.namespace.Namespace;
+import org.apache.distributedlog.callback.NamespaceListener;
+import org.apache.distributedlog.impl.BKNamespaceDriver;
+import org.apache.distributedlog.logsegment.LogSegmentMetadataStore;
+import org.apache.distributedlog.api.namespace.NamespaceBuilder;
+import org.apache.distributedlog.namespace.NamespaceDriver;
+import org.apache.distributedlog.common.concurrent.FutureEventListener;
+import org.apache.distributedlog.common.concurrent.FutureUtils;
+import org.apache.distributedlog.util.Utils;
 import org.apache.bookkeeper.client.BKException;
 import org.apache.bookkeeper.client.BookKeeper;
 import org.apache.bookkeeper.client.BookKeeperAccessor;
 import org.apache.bookkeeper.client.BookKeeperAdmin;
 import org.apache.bookkeeper.client.LedgerEntry;
 import org.apache.bookkeeper.client.LedgerHandle;
+import org.apache.bookkeeper.client.LedgerMetadata;
 import org.apache.bookkeeper.client.LedgerReader;
 import org.apache.bookkeeper.net.BookieSocketAddress;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks;
@@ -70,51 +82,40 @@ import org.apache.commons.cli.ParseException;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.lang3.tuple.Pair;
-import org.apache.distributedlog.BKDistributedLogNamespace;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
+import com.google.common.util.concurrent.RateLimiter;
+import org.apache.distributedlog.api.AsyncLogReader;
+import org.apache.distributedlog.api.AsyncLogWriter;
 import org.apache.distributedlog.BookKeeperClient;
 import org.apache.distributedlog.BookKeeperClientBuilder;
 import org.apache.distributedlog.DLSN;
 import org.apache.distributedlog.DistributedLogConfiguration;
 import org.apache.distributedlog.DistributedLogConstants;
-import org.apache.distributedlog.Entry;
+import org.apache.distributedlog.api.DistributedLogManager;
+import org.apache.distributedlog.exceptions.LogNotFoundException;
+import org.apache.distributedlog.api.LogReader;
 import org.apache.distributedlog.LogRecord;
 import org.apache.distributedlog.LogRecordWithDLSN;
 import org.apache.distributedlog.LogSegmentMetadata;
 import org.apache.distributedlog.ZooKeeperClient;
 import org.apache.distributedlog.ZooKeeperClientBuilder;
-import org.apache.distributedlog.api.AsyncLogReader;
-import org.apache.distributedlog.api.AsyncLogWriter;
-import org.apache.distributedlog.api.DistributedLogManager;
-import org.apache.distributedlog.api.LogReader;
-import org.apache.distributedlog.api.MetadataAccessor;
-import org.apache.distributedlog.api.namespace.Namespace;
-import org.apache.distributedlog.api.namespace.NamespaceBuilder;
 import org.apache.distributedlog.auditor.DLAuditor;
 import org.apache.distributedlog.bk.LedgerAllocator;
 import org.apache.distributedlog.bk.LedgerAllocatorUtils;
-import org.apache.distributedlog.callback.NamespaceListener;
-import org.apache.distributedlog.common.concurrent.FutureEventListener;
-import org.apache.distributedlog.common.concurrent.FutureUtils;
-import org.apache.distributedlog.exceptions.LogNotFoundException;
-import org.apache.distributedlog.impl.BKNamespaceDriver;
 import org.apache.distributedlog.impl.metadata.BKDLConfig;
-import org.apache.distributedlog.logsegment.LogSegmentMetadataStore;
-import org.apache.distributedlog.metadata.LogSegmentMetadataStoreUpdater;
 import org.apache.distributedlog.metadata.MetadataUpdater;
-import org.apache.distributedlog.namespace.NamespaceDriver;
-import org.apache.distributedlog.util.Utils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.distributedlog.metadata.LogSegmentMetadataStoreUpdater;
+import org.apache.distributedlog.common.util.SchedulerUtils;
 
+import static com.google.common.base.Charsets.UTF_8;
 
+public class DistributedLogTool extends Tool {
 
-
-/**
- *DistributedLogTool.
-*/
- public class DistributedLogTool extends Tool {
-
-    private static final Logger logger = LoggerFactory.getLogger(DistributedLogTool.class);
+    static final Logger logger = LoggerFactory.getLogger(DistributedLogTool.class);
 
     static final List<String> EMPTY_LIST = Lists.newArrayList();
 
@@ -212,8 +213,7 @@ import org.slf4j.LoggerFactory;
                 } catch (ConfigurationException e) {
                     throw new ParseException("Failed to load distributedlog configuration from " + configFile + ".");
                 } catch (MalformedURLException e) {
-                    throw new ParseException("Failed to load distributedlog configuration from "
-                            + configFile + ": malformed uri.");
+                    throw new ParseException("Failed to load distributedlog configuration from " + configFile + ": malformed uri.");
                 }
             }
             if (cmdline.hasOption("a")) {
@@ -305,9 +305,9 @@ import org.slf4j.LoggerFactory;
             return runSimpleCmd();
         }
 
-        protected abstract int runSimpleCmd() throws Exception;
+        abstract protected int runSimpleCmd() throws Exception;
 
-        protected abstract void parseCommandLine(CommandLine cmdline) throws ParseException;
+        abstract protected void parseCommandLine(CommandLine cmdline) throws ParseException;
 
         @Override
         protected Options getOptions() {
@@ -366,15 +366,13 @@ import org.slf4j.LoggerFactory;
             if (cmdline.hasOption("t")) {
                 concurrency = Integer.parseInt(cmdline.getOptionValue("t"));
                 if (concurrency <= 0) {
-                    throw new ParseException("Invalid concurrency value : "
-                            + concurrency + ": it must be greater or equal to 0.");
+                    throw new ParseException("Invalid concurrency value : " + concurrency + ": it must be greater or equal to 0.");
                 }
             }
             if (cmdline.hasOption("ap")) {
                 allocationPoolPath = cmdline.getOptionValue("ap");
                 if (!allocationPoolPath.startsWith(".") || !allocationPoolPath.contains("allocation")) {
-                    throw new ParseException("Invalid allocation pool path : "
-                            + allocationPoolPath + ": it must starts with a '.' and must contains 'allocation'");
+                    throw new ParseException("Invalid allocation pool path : " + allocationPoolPath + ": it must starts with a '.' and must contains 'allocation'");
                 }
             }
         }
@@ -384,7 +382,7 @@ import org.slf4j.LoggerFactory;
             String rootPath = getUri().getPath() + "/" + allocationPoolPath;
             final ScheduledExecutorService allocationExecutor = Executors.newSingleThreadScheduledExecutor();
             ExecutorService executorService = Executors.newFixedThreadPool(concurrency);
-            checkArgument(getNamespace() instanceof BKDistributedLogNamespace);
+            Preconditions.checkArgument(getNamespace() instanceof BKDistributedLogNamespace);
             BKDistributedLogNamespace bkns = (BKDistributedLogNamespace) getNamespace();
             final ZooKeeperClient zkc = ((BKNamespaceDriver) bkns.getNamespaceDriver()).getWriterZKC();
             final BookKeeperClient bkc = ((BKNamespaceDriver) bkns.getNamespaceDriver()).getReaderBKC();
@@ -414,8 +412,7 @@ import org.slf4j.LoggerFactory;
                                         allocator.delete();
                                         System.out.println("Deleted allocator pool : " + poolPath + " .");
                                     } catch (IOException ioe) {
-                                        System.err.println("Failed to delete allocator pool "
-                                                + poolPath + " : " + ioe.getMessage());
+                                        System.err.println("Failed to delete allocator pool " + poolPath + " : " + ioe.getMessage());
                                     }
                                 }
                                 doneLatch.countDown();
@@ -438,9 +435,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-/**
- * List distributedlog associated info.
- */
     public static class ListCommand extends PerDLCommand {
 
         boolean printMetadata = false;
@@ -496,9 +490,7 @@ import org.slf4j.LoggerFactory;
             System.out.println("--------------------------------");
         }
     }
-/**
- * watch and report changes for a dl namespace.
- */
+
     public static class WatchNamespaceCommand extends PerDLCommand implements NamespaceListener {
         private Set<String> currentSet = Sets.<String>newHashSet();
         private CountDownLatch doneLatch = new CountDownLatch(1);
@@ -548,9 +540,7 @@ import org.slf4j.LoggerFactory;
             namespace.registerNamespaceListener(this);
         }
     }
-/**
- * Inspect streams under a given dl uri to find any potential corruptions.
- */
+
     protected static class InspectCommand extends PerDLCommand {
 
         int numThreads = 1;
@@ -598,8 +588,7 @@ import org.slf4j.LoggerFactory;
                 System.out.println(corruptedCandidates.keySet());
                 return 0;
             }
-            for (Map.Entry<String, List<Pair<LogSegmentMetadata,
-                    List<String>>>> entry : corruptedCandidates.entrySet()) {
+            for (Map.Entry<String, List<Pair<LogSegmentMetadata, List<String>>>> entry : corruptedCandidates.entrySet()) {
                 System.out.println(entry.getKey() + " : \n");
                 for (Pair<LogSegmentMetadata, List<String>> pair : entry.getValue()) {
                     System.out.println("\t - " + pair.getLeft());
@@ -616,8 +605,8 @@ import org.slf4j.LoggerFactory;
             return 0;
         }
 
-        private void inspectStreams(final SortedMap<String,
-                List<Pair<LogSegmentMetadata, List<String>>>> corruptedCandidates) throws Exception {
+        private void inspectStreams(final SortedMap<String, List<Pair<LogSegmentMetadata, List<String>>>> corruptedCandidates)
+                throws Exception {
             Iterator<String> streamCollection = getNamespace().getLogs();
             final List<String> streams = new ArrayList<String>();
             while (streamCollection.hasNext()) {
@@ -634,8 +623,7 @@ import org.slf4j.LoggerFactory;
                 return;
             }
             println("Streams : " + streams);
-            if (!getForce() && !IOUtils.confirmPrompt("Are you sure you want to inspect "
-                    + streams.size() + " streams")) {
+            if (!getForce() && !IOUtils.confirmPrompt("Are you sure you want to inspect " + streams.size() + " streams")) {
                 return;
             }
             numThreads = Math.min(streams.size(), numThreads);
@@ -686,8 +674,7 @@ import org.slf4j.LoggerFactory;
                             }
                         }
                         for (LogSegmentMetadata segment : segments) {
-                            if (!segment.isInProgress()
-                                    && inprogressSeqNos.contains(segment.getLogSegmentSequenceNumber())) {
+                            if (!segment.isInProgress() && inprogressSeqNos.contains(segment.getLogSegmentSequenceNumber())) {
                                 isCandidate = true;
                             }
                         }
@@ -714,8 +701,8 @@ import org.slf4j.LoggerFactory;
                             LogSegmentMetadata segment = seg;
                             List<String> dumpedEntries = new ArrayList<String>();
                             if (segment.isInProgress()) {
-                                LedgerHandle lh = bkc.get().openLedgerNoRecovery(segment.getLogSegmentId(),
-                                        BookKeeper.DigestType.CRC32, dlConf.getBKDigestPW().getBytes(UTF_8));
+                                LedgerHandle lh = bkc.get().openLedgerNoRecovery(segment.getLogSegmentId(), BookKeeper.DigestType.CRC32,
+                                                                                 dlConf.getBKDigestPW().getBytes(UTF_8));
                                 try {
                                     long lac = lh.readLastConfirmed();
                                     segment = segment.mutator().setLastEntryId(lac).build();
@@ -754,9 +741,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command used to truncate streams under a given dl uri.
-     */
     protected static class TruncateCommand extends PerDLCommand {
 
         int numThreads = 1;
@@ -863,9 +847,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Simple bk client.
-     */
     public static class SimpleBookKeeperClient {
         BookKeeperClient bkc;
         ZooKeeperClient zkc;
@@ -902,9 +883,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command used to show metadata of a given stream and list segments.
-     */
     protected static class ShowCommand extends PerStreamCommand {
 
         SimpleBookKeeperClient bkc = null;
@@ -985,8 +963,7 @@ import org.slf4j.LoggerFactory;
             long firstTxnId = dlm.getFirstTxId();
             long lastTxnId = dlm.getLastTxId();
             long recordCount = dlm.getLogRecordCount();
-            String result = String.format("Stream : (firstTxId=%d, lastTxid=%d, firstDlsn=%s,"
-                            + " lastDlsn=%s, endOfStreamMarked=%b, recordCount=%d)",
+            String result = String.format("Stream : (firstTxId=%d, lastTxid=%d, firstDlsn=%s, lastDlsn=%s, endOfStreamMarked=%b, recordCount=%d)",
                 firstTxnId, lastTxnId, getDlsnName(firstDlsn), getDlsnName(lastDlsn), endOfStreamMarked, recordCount);
             System.out.println(result);
             if (listEppStats) {
@@ -995,8 +972,7 @@ import org.slf4j.LoggerFactory;
         }
 
         boolean include(LogSegmentMetadata segment) {
-            return (firstLid <= segment.getLogSegmentSequenceNumber()
-                    && (lastLid == -1 || lastLid >= segment.getLogSegmentSequenceNumber()));
+            return (firstLid <= segment.getLogSegmentSequenceNumber() && (lastLid == -1 || lastLid >= segment.getLogSegmentSequenceNumber()));
         }
 
         private void printEppStatsHeader(DistributedLogManager dlm) throws Exception {
@@ -1009,12 +985,10 @@ import org.slf4j.LoggerFactory;
                     merge(totals, getBookieStats(segment));
                 }
             }
-            List<Map.Entry<BookieSocketAddress, Integer>> entries =
-                    new ArrayList<Map.Entry<BookieSocketAddress, Integer>>(totals.entrySet());
+            List<Map.Entry<BookieSocketAddress, Integer>> entries = new ArrayList<Map.Entry<BookieSocketAddress, Integer>>(totals.entrySet());
             Collections.sort(entries, new Comparator<Map.Entry<BookieSocketAddress, Integer>>() {
                 @Override
-                public int compare(Map.Entry<BookieSocketAddress, Integer> o1,
-                                   Map.Entry<BookieSocketAddress, Integer> o2) {
+                public int compare(Map.Entry<BookieSocketAddress, Integer> o1, Map.Entry<BookieSocketAddress, Integer> o2) {
                     return o2.getValue() - o1.getValue();
                 }
             });
@@ -1025,8 +999,7 @@ import org.slf4j.LoggerFactory;
                 totalEntries += entry.getValue();
             }
             for (Map.Entry<BookieSocketAddress, Integer> entry : entries) {
-                System.out.println(String.format("%" + width + "s\t%6.2f%%\t\t%d",
-                        entry.getKey(), entry.getValue() * 1.0 / totalEntries, entry.getValue()));
+                System.out.println(String.format("%"+width+"s\t%6.2f%%\t\t%d", entry.getKey(), entry.getValue()*1.0/totalEntries, entry.getValue()));
             }
         }
 
@@ -1036,11 +1009,10 @@ import org.slf4j.LoggerFactory;
 
         private Map<BookieSocketAddress, Integer> getBookieStats(LogSegmentMetadata segment) throws Exception {
             Map<BookieSocketAddress, Integer> stats = new HashMap<BookieSocketAddress, Integer>();
-            LedgerHandle lh = bkc.client().get().openLedgerNoRecovery(segment.getLogSegmentId(),
-                    BookKeeper.DigestType.CRC32, getConf().getBKDigestPW().getBytes(UTF_8));
+            LedgerHandle lh = bkc.client().get().openLedgerNoRecovery(segment.getLogSegmentId(), BookKeeper.DigestType.CRC32,
+                    getConf().getBKDigestPW().getBytes(UTF_8));
             long eidFirst = 0;
-            for (SortedMap.Entry<Long, ArrayList<BookieSocketAddress>>
-                    entry : LedgerReader.bookiesForLedger(lh).entrySet()) {
+            for (SortedMap.Entry<Long, ArrayList<BookieSocketAddress>> entry : LedgerReader.bookiesForLedger(lh).entrySet()) {
                 long eidLast = entry.getKey().longValue();
                 long count = eidLast - eidFirst + 1;
                 for (BookieSocketAddress bookie : entry.getValue()) {
@@ -1158,10 +1130,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-
-    /**
-     * Command used to delete a given stream.
-     */
     public static class DeleteCommand extends PerStreamCommand {
 
         protected DeleteCommand() {
@@ -1186,9 +1154,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command used to delete given ledgers.
-     */
     public static class DeleteLedgersCommand extends PerDLCommand {
 
         private final List<Long> ledgers = new ArrayList<Long>();
@@ -1209,8 +1174,7 @@ import org.slf4j.LoggerFactory;
                 throw new ParseException("Please specify ledgers: either use list or use file only.");
             }
             if (!cmdline.hasOption("l") && !cmdline.hasOption("lf")) {
-                throw new ParseException("No ledgers specified."
-                        + " Please specify ledgers either use list or use file only.");
+                throw new ParseException("No ledgers specified. Please specify ledgers either use list or use file only.");
             }
             if (cmdline.hasOption("l")) {
                 String ledgersStr = cmdline.getOptionValue("l");
@@ -1305,9 +1269,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command used to create streams under a given namespace.
-     */
     public static class CreateCommand extends PerDLCommand {
 
         final List<String> streams = new ArrayList<String>();
@@ -1318,8 +1279,8 @@ import org.slf4j.LoggerFactory;
         CreateCommand() {
             super("create", "create streams under a given namespace");
             options.addOption("r", "prefix", true, "Prefix of stream name. E.g. 'QuantumLeapTest-'.");
-            options.addOption("e", "expression", true, "Expression to generate stream suffix. "
-                    + "Currently we support range 'x-y', list 'x,y,z' and name 'xyz'");
+            options.addOption("e", "expression", true, "Expression to generate stream suffix. " +
+                              "Currently we support range 'x-y', list 'x,y,z' and name 'xyz'");
         }
 
         @Override
@@ -1402,9 +1363,7 @@ import org.slf4j.LoggerFactory;
             this.streamExpression = expression;
         }
     }
-    /**
-     * Command used to dump records of a given stream.
-     */
+
     protected static class DumpCommand extends PerStreamCommand {
 
         boolean printHex = false;
@@ -1494,8 +1453,8 @@ import org.slf4j.LoggerFactory;
                     return 0;
                 }
                 try {
-                    System.out.println(String.format("Dump records for %s (from = %s, dump"
-                            + " count = %d, total records = %d)", getStreamName(), startOffset, count, totalCount));
+                    System.out.println(String.format("Dump records for %s (from = %s, dump count = %d, total records = %d)",
+                            getStreamName(), startOffset, count, totalCount));
 
                     dumpRecords(reader);
                 } finally {
@@ -1561,8 +1520,9 @@ import org.slf4j.LoggerFactory;
     }
 
     /**
-     * TODO: refactor inspect & inspectstream.
+     * TODO: refactor inspect & inspectstream
      * TODO: support force
+     *
      * inspectstream -lac -gap (different options for different operations for a single stream)
      * inspect -lac -gap (inspect the namespace, which will use inspect stream)
      */
@@ -1649,8 +1609,7 @@ import org.slf4j.LoggerFactory;
             final AtomicInteger rcHolder = new AtomicInteger(-1234);
             final CountDownLatch doneLatch = new CountDownLatch(1);
             try {
-                lr.forwardReadEntriesFromLastConfirmed(readLh,
-                        new BookkeeperInternalCallbacks.GenericCallback<List<LedgerEntry>>() {
+                lr.forwardReadEntriesFromLastConfirmed(readLh, new BookkeeperInternalCallbacks.GenericCallback<List<LedgerEntry>>() {
                     @Override
                     public void operationComplete(int rc, List<LedgerEntry> entries) {
                         rcHolder.set(rc);
@@ -1671,11 +1630,9 @@ import org.slf4j.LoggerFactory;
                     lastEntryId = lastEntry.getEntryId();
                 }
                 if (lastEntryId != lh.getLastAddConfirmed()) {
-                    System.out.println("Inconsistent Last Add Confirmed Found for LogSegment "
-                            + metadata.getLogSegmentSequenceNumber() + ": ");
+                    System.out.println("Inconsistent Last Add Confirmed Found for LogSegment " + metadata.getLogSegmentSequenceNumber() + ": ");
                     System.out.println("\t metadata: " + metadata);
-                    System.out.println("\t lac in ledger metadata is " + lh.getLastAddConfirmed()
-                            + ", but lac in bookies is " + lastEntryId);
+                    System.out.println("\t lac in ledger metadata is " + lh.getLastAddConfirmed() + ", but lac in bookies is " + lastEntryId);
                     return false;
                 } else {
                     return true;
@@ -1708,7 +1665,7 @@ import org.slf4j.LoggerFactory;
                 System.out.println("Skip inprogress log segment " + segment);
                 return;
             }
-            LedgerHandle lh = bkAdmin.openLedger(segment.getLogSegmentId());
+            LedgerHandle lh = bkAdmin.openLedger(segment.getLogSegmentId(), true);
             long lac = lh.getLastAddConfirmed();
             Enumeration<LedgerEntry> entries = lh.readEntries(lac, lac);
             if (!entries.hasMoreElements()) {
@@ -1719,9 +1676,8 @@ import org.slf4j.LoggerFactory;
                     .setLogSegmentInfo(segment.getLogSegmentSequenceNumber(), segment.getStartSequenceId())
                     .setEntryId(lastEntry.getEntryId())
                     .setEnvelopeEntry(LogSegmentMetadata.supportsEnvelopedEntries(segment.getVersion()))
-                    .setEntry(lastEntry.getEntryBuffer())
+                    .setInputStream(lastEntry.getEntryInputStream())
                     .buildReader();
-            lastEntry.getEntryBuffer().release();
             LogRecordWithDLSN record = reader.nextRecord();
             LogRecordWithDLSN lastRecord = null;
             while (null != record) {
@@ -1744,7 +1700,7 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    interface BKCommandRunner {
+    static interface BKCommandRunner {
         int run(ZooKeeperClient zkc, BookKeeperClient bkc) throws Exception;
     }
 
@@ -1768,9 +1724,317 @@ import org.slf4j.LoggerFactory;
             return runner.run(getZooKeeperClient(), getBookKeeperClient());
         }
 
-        protected abstract int runBKCmd(ZooKeeperClient zkc, BookKeeperClient bkc) throws Exception;
+        abstract protected int runBKCmd(ZooKeeperClient zkc, BookKeeperClient bkc) throws Exception;
     }
 
+    static class RecoverCommand extends PerBKCommand {
+
+        final List<Long> ledgers = new ArrayList<Long>();
+        boolean query = false;
+        boolean dryrun = false;
+        boolean skipOpenLedgers = false;
+        boolean fenceOnly = false;
+        int fenceRate = 1;
+        int concurrency = 1;
+        final Set<BookieSocketAddress> bookiesSrc = new HashSet<BookieSocketAddress>();
+        int partition = 0;
+        int numPartitions = 0;
+
+        RecoverCommand() {
+            super("recover", "Recover the ledger data that stored on failed bookies");
+            options.addOption("l", "ledger", true, "Specific ledger to recover");
+            options.addOption("lf", "ledgerfile", true, "File contains ledgers list");
+            options.addOption("q", "query", false, "Query the ledgers that contain given bookies");
+            options.addOption("d", "dryrun", false, "Print the recovery plan w/o actually recovering");
+            options.addOption("cy", "concurrency", true, "Number of ledgers could be recovered in parallel");
+            options.addOption("sk", "skipOpenLedgers", false, "Skip recovering open ledgers");
+            options.addOption("p", "partition", true, "partition");
+            options.addOption("n", "num-partitions", true, "num partitions");
+            options.addOption("fo", "fence-only", true, "fence the ledgers only w/o re-replicating entries");
+            options.addOption("fr", "fence-rate", true, "rate on fencing ledgers");
+        }
+
+        @Override
+        protected void parseCommandLine(CommandLine cmdline) throws ParseException {
+            super.parseCommandLine(cmdline);
+            query = cmdline.hasOption("q");
+            force = cmdline.hasOption("f");
+            dryrun = cmdline.hasOption("d");
+            skipOpenLedgers = cmdline.hasOption("sk");
+            fenceOnly = cmdline.hasOption("fo");
+            if (cmdline.hasOption("l")) {
+                String[] lidStrs = cmdline.getOptionValue("l").split(",");
+                try {
+                    for (String lidStr : lidStrs) {
+                        ledgers.add(Long.parseLong(lidStr));
+                    }
+                } catch (NumberFormatException nfe) {
+                    throw new ParseException("Invalid ledger id provided : " + cmdline.getOptionValue("l"));
+                }
+            }
+            if (cmdline.hasOption("lf")) {
+                String file = cmdline.getOptionValue("lf");
+                try {
+                    BufferedReader br = new BufferedReader(
+                            new InputStreamReader(new FileInputStream(file), UTF_8.name()));
+                    try {
+                        String line = br.readLine();
+
+                        while (line != null) {
+                            ledgers.add(Long.parseLong(line));
+                            line = br.readLine();
+                        }
+                    } finally {
+                        br.close();
+                    }
+                } catch (IOException e) {
+                    throw new ParseException("Invalid ledgers file provided : " + file);
+                }
+            }
+            if (cmdline.hasOption("cy")) {
+                try {
+                    concurrency = Integer.parseInt(cmdline.getOptionValue("cy"));
+                } catch (NumberFormatException nfe) {
+                    throw new ParseException("Invalid concurrency provided : " + cmdline.getOptionValue("cy"));
+                }
+            }
+            if (cmdline.hasOption("p")) {
+                partition = Integer.parseInt(cmdline.getOptionValue("p"));
+            }
+            if (cmdline.hasOption("n")) {
+                numPartitions = Integer.parseInt(cmdline.getOptionValue("n"));
+            }
+            if (cmdline.hasOption("fr")) {
+                fenceRate = Integer.parseInt(cmdline.getOptionValue("fr"));
+            }
+            // Get bookies list to recover
+            String[] args = cmdline.getArgs();
+            final String[] bookieStrs = args[0].split(",");
+            for (String bookieStr : bookieStrs) {
+                final String bookieStrParts[] = bookieStr.split(":");
+                if (bookieStrParts.length != 2) {
+                    throw new ParseException("BookieSrcs has invalid bookie address format (host:port expected) : "
+                            + bookieStr);
+                }
+                try {
+                    bookiesSrc.add(new BookieSocketAddress(bookieStrParts[0],
+                            Integer.parseInt(bookieStrParts[1])));
+                } catch (NumberFormatException nfe) {
+                    throw new ParseException("Invalid ledger id provided : " + cmdline.getOptionValue("l"));
+                }
+            }
+        }
+
+        @Override
+        protected int runBKCmd(ZooKeeperClient zkc, BookKeeperClient bkc) throws Exception {
+            BookKeeperAdmin bkAdmin = new BookKeeperAdmin(bkc.get());
+            try {
+                if (query) {
+                    return bkQuery(bkAdmin, bookiesSrc);
+                }
+                if (fenceOnly) {
+                    return bkFence(bkc, ledgers, fenceRate);
+                }
+                if (!force) {
+                    System.out.println("Bookies : " + bookiesSrc);
+                    if (!IOUtils.confirmPrompt("Do you want to recover them: (Y/N)")) {
+                        return -1;
+                    }
+                }
+                if (!ledgers.isEmpty()) {
+                    System.out.println("Ledgers : " + ledgers);
+                    long numProcessed = 0;
+                    Iterator<Long> ledgersIter = ledgers.iterator();
+                    LinkedBlockingQueue<Long> ledgersToProcess = new LinkedBlockingQueue<Long>();
+                    while (ledgersIter.hasNext()) {
+                        long lid = ledgersIter.next();
+                        if (numPartitions <=0 || (numPartitions > 0 && lid % numPartitions == partition)) {
+                            ledgersToProcess.add(lid);
+                            ++numProcessed;
+                        }
+                        if (ledgersToProcess.size() == 10000) {
+                            System.out.println("Processing " + numProcessed + " ledgers");
+                            bkRecovery(ledgersToProcess, bookiesSrc, dryrun, skipOpenLedgers);
+                            ledgersToProcess.clear();
+                            System.out.println("Processed " + numProcessed + " ledgers");
+                        }
+                    }
+                    if (!ledgersToProcess.isEmpty()) {
+                        System.out.println("Processing " + numProcessed + " ledgers");
+                        bkRecovery(ledgersToProcess, bookiesSrc, dryrun, skipOpenLedgers);
+                        System.out.println("Processed " + numProcessed + " ledgers");
+                    }
+                    System.out.println("Done.");
+                    CountDownLatch latch = new CountDownLatch(1);
+                    latch.await();
+                    return 0;
+                }
+                return bkRecovery(bkAdmin, bookiesSrc, dryrun, skipOpenLedgers);
+            } finally {
+                bkAdmin.close();
+            }
+        }
+
+        private int bkFence(final BookKeeperClient bkc, List<Long> ledgers, int fenceRate) throws Exception {
+            if (ledgers.isEmpty()) {
+                System.out.println("Nothing to fence. Done.");
+                return 0;
+            }
+            ExecutorService executorService = Executors.newCachedThreadPool();
+            final RateLimiter rateLimiter = RateLimiter.create(fenceRate);
+            final byte[] passwd = getConf().getBKDigestPW().getBytes(UTF_8);
+            final CountDownLatch latch = new CountDownLatch(ledgers.size());
+            final AtomicInteger numPendings = new AtomicInteger(ledgers.size());
+            final LinkedBlockingQueue<Long> ledgersQueue = new LinkedBlockingQueue<Long>();
+            ledgersQueue.addAll(ledgers);
+
+            for (int i = 0; i < concurrency; i++) {
+                executorService.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        while (!ledgersQueue.isEmpty()) {
+                            rateLimiter.acquire();
+                            Long lid = ledgersQueue.poll();
+                            if (null == lid) {
+                                break;
+                            }
+                            System.out.println("Fencing ledger " + lid);
+                            int numRetries = 3;
+                            while (numRetries > 0) {
+                                try {
+                                    LedgerHandle lh = bkc.get().openLedger(lid, BookKeeper.DigestType.CRC32, passwd);
+                                    lh.close();
+                                    System.out.println("Fenced ledger " + lid + ", " + numPendings.decrementAndGet() + " left.");
+                                    latch.countDown();
+                                } catch (BKException.BKNoSuchLedgerExistsException bke) {
+                                    System.out.println("Skipped fence non-exist ledger " + lid + ", " + numPendings.decrementAndGet() + " left.");
+                                    latch.countDown();
+                                } catch (BKException.BKLedgerRecoveryException lre) {
+                                    --numRetries;
+                                    continue;
+                                } catch (Exception e) {
+                                    e.printStackTrace();
+                                    break;
+                                }
+                                numRetries = 0;
+                            }
+                        }
+                        System.out.println("Thread exits");
+                    }
+                });
+            }
+            latch.await();
+            SchedulerUtils.shutdownScheduler(executorService, 2, TimeUnit.MINUTES);
+            return 0;
+        }
+
+        private int bkQuery(BookKeeperAdmin bkAdmin, Set<BookieSocketAddress> bookieAddrs)
+                throws InterruptedException, BKException {
+            SortedMap<Long, LedgerMetadata> ledgersContainBookies =
+                    bkAdmin.getLedgersContainBookies(bookieAddrs);
+            System.err.println("NOTE: Bookies in inspection list are marked with '*'.");
+            for (Map.Entry<Long, LedgerMetadata> ledger : ledgersContainBookies.entrySet()) {
+                System.out.println("ledger " + ledger.getKey() + " : " + ledger.getValue().getState());
+                Map<Long, Integer> numBookiesToReplacePerEnsemble =
+                        inspectLedger(ledger.getValue(), bookieAddrs);
+                System.out.print("summary: [");
+                for (Map.Entry<Long, Integer> entry : numBookiesToReplacePerEnsemble.entrySet()) {
+                    System.out.print(entry.getKey() + "=" + entry.getValue() + ", ");
+                }
+                System.out.println("]");
+                System.out.println();
+            }
+            System.out.println("Done");
+            return 0;
+        }
+
+        private Map<Long, Integer> inspectLedger(LedgerMetadata metadata, Set<BookieSocketAddress> bookiesToInspect) {
+            Map<Long, Integer> numBookiesToReplacePerEnsemble = new TreeMap<Long, Integer>();
+            for (Map.Entry<Long, ArrayList<BookieSocketAddress>> ensemble : metadata.getEnsembles().entrySet()) {
+                ArrayList<BookieSocketAddress> bookieList = ensemble.getValue();
+                System.out.print(ensemble.getKey() + ":\t");
+                int numBookiesToReplace = 0;
+                for (BookieSocketAddress bookie: bookieList) {
+                    System.out.print(bookie.toString());
+                    if (bookiesToInspect.contains(bookie)) {
+                        System.out.print("*");
+                        ++numBookiesToReplace;
+                    } else {
+                        System.out.print(" ");
+                    }
+                    System.out.print(" ");
+                }
+                System.out.println();
+                numBookiesToReplacePerEnsemble.put(ensemble.getKey(), numBookiesToReplace);
+            }
+            return numBookiesToReplacePerEnsemble;
+        }
+
+        private int bkRecovery(final LinkedBlockingQueue<Long> ledgers, final Set<BookieSocketAddress> bookieAddrs,
+                               final boolean dryrun, final boolean skipOpenLedgers)
+                throws Exception {
+            return runBKCommand(new BKCommandRunner() {
+                @Override
+                public int run(ZooKeeperClient zkc, BookKeeperClient bkc) throws Exception {
+                    BookKeeperAdmin bkAdmin = new BookKeeperAdmin(bkc.get());
+                    try {
+                        bkRecovery(bkAdmin, ledgers, bookieAddrs, dryrun, skipOpenLedgers);
+                        return 0;
+                    } finally {
+                        bkAdmin.close();
+                    }
+                }
+            });
+        }
+
+        private int bkRecovery(final BookKeeperAdmin bkAdmin, final LinkedBlockingQueue<Long> ledgers,
+                               final Set<BookieSocketAddress> bookieAddrs,
+                               final boolean dryrun, final boolean skipOpenLedgers)
+                throws InterruptedException, BKException {
+            final AtomicInteger numPendings = new AtomicInteger(ledgers.size());
+            final ExecutorService executorService = Executors.newCachedThreadPool();
+            final CountDownLatch doneLatch = new CountDownLatch(concurrency);
+            Runnable r = new Runnable() {
+                @Override
+                public void run() {
+                    while (!ledgers.isEmpty()) {
+                        long lid = -1L;
+                        try {
+                            lid = ledgers.take();
+                            System.out.println("Recovering ledger " + lid);
+                            bkAdmin.recoverBookieData(lid, bookieAddrs, dryrun, skipOpenLedgers);
+                            System.out.println("Recovered ledger completed : " + lid + ", " + numPendings.decrementAndGet() + " left");
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            doneLatch.countDown();
+                            break;
+                        } catch (BKException ke) {
+                            System.out.println("Recovered ledger failed : " + lid + ", rc = " + BKException.getMessage(ke.getCode()));
+                        }
+                    }
+                    doneLatch.countDown();
+                }
+            };
+            for (int i = 0; i < concurrency; i++) {
+                executorService.submit(r);
+            }
+            doneLatch.await();
+            SchedulerUtils.shutdownScheduler(executorService, 2, TimeUnit.MINUTES);
+            return 0;
+        }
+
+        private int bkRecovery(BookKeeperAdmin bkAdmin, Set<BookieSocketAddress> bookieAddrs,
+                               boolean dryrun, boolean skipOpenLedgers)
+                throws InterruptedException, BKException {
+            bkAdmin.recoverBookieData(bookieAddrs, dryrun, skipOpenLedgers);
+            return 0;
+        }
+
+        @Override
+        protected String getUsage() {
+            return "recover [options] <bookiesSrc>";
+        }
+    }
 
     /**
      * Per Ledger Command, which parse common options for per ledger. e.g. ledger id.
@@ -1802,9 +2066,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command used to force recover ledger.
-     */
     protected static class RecoverLedgerCommand extends PerLedgerCommand {
 
         RecoverLedgerCommand() {
@@ -1843,9 +2104,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command used to find the stream for a given ledger.
-     */
     protected static class FindLedgerCommand extends PerLedgerCommand {
 
         FindLedgerCommand() {
@@ -1882,9 +2140,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command used to read last add confirmed for a given ledger.
-     */
     protected static class ReadLastConfirmedCommand extends PerLedgerCommand {
 
         ReadLastConfirmedCommand() {
@@ -1910,9 +2165,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command used to read entries for a given ledger.
-     */
     protected static class ReadEntriesCommand extends PerLedgerCommand {
 
         Long fromEntryId;
@@ -1932,8 +2184,7 @@ import org.slf4j.LoggerFactory;
             options.addOption("fid", "from", true, "Entry id to start reading");
             options.addOption("uid", "until", true, "Entry id to read until");
             options.addOption("bks", "all-bookies", false, "Read entry from all bookies");
-            options.addOption("lac", "last-add-confirmed", false,
-                    "Return last add confirmed rather than entry payload");
+            options.addOption("lac", "last-add-confirmed", false, "Return last add confirmed rather than entry payload");
             options.addOption("ver", "metadata-version", true, "The log segment metadata version to use");
             options.addOption("bad", "corrupt-only", false, "Display info for corrupt entries only");
         }
@@ -1959,9 +2210,8 @@ import org.slf4j.LoggerFactory;
 
         @Override
         protected int runCmd() throws Exception {
-            LedgerHandle lh = getBookKeeperClient().get()
-                    .openLedgerNoRecovery(getLedgerID(), BookKeeper.DigestType.CRC32,
-                            dlConf.getBKDigestPW().getBytes(UTF_8));
+            LedgerHandle lh = getBookKeeperClient().get().openLedgerNoRecovery(getLedgerID(), BookKeeper.DigestType.CRC32,
+                    dlConf.getBKDigestPW().getBytes(UTF_8));
             try {
                 if (null == fromEntryId) {
                     fromEntryId = 0L;
@@ -1989,27 +2239,30 @@ import org.slf4j.LoggerFactory;
             return 0;
         }
 
-        private void readEntriesFromAllBookies(LedgerReader ledgerReader,
-                                               LedgerHandle lh, long fromEntryId, long untilEntryId)
+        private void readEntriesFromAllBookies(LedgerReader ledgerReader, LedgerHandle lh, long fromEntryId, long untilEntryId)
                 throws Exception {
             for (long eid = fromEntryId; eid <= untilEntryId; ++eid) {
                 final CountDownLatch doneLatch = new CountDownLatch(1);
-                final AtomicReference<Set<LedgerReader.ReadResult<ByteBuf>>> resultHolder = new AtomicReference<>();
-                ledgerReader.readEntriesFromAllBookies(lh, eid, (rc, readResults) -> {
-                    if (BKException.Code.OK == rc) {
-                        resultHolder.set(readResults);
-                    } else {
-                        resultHolder.set(null);
+                final AtomicReference<Set<LedgerReader.ReadResult<InputStream>>> resultHolder =
+                        new AtomicReference<Set<LedgerReader.ReadResult<InputStream>>>();
+                ledgerReader.readEntriesFromAllBookies(lh, eid, new BookkeeperInternalCallbacks.GenericCallback<Set<LedgerReader.ReadResult<InputStream>>>() {
+                    @Override
+                    public void operationComplete(int rc, Set<LedgerReader.ReadResult<InputStream>> readResults) {
+                        if (BKException.Code.OK == rc) {
+                            resultHolder.set(readResults);
+                        } else {
+                            resultHolder.set(null);
+                        }
+                        doneLatch.countDown();
                     }
-                    doneLatch.countDown();
                 });
                 doneLatch.await();
-                Set<LedgerReader.ReadResult<ByteBuf>> readResults = resultHolder.get();
+                Set<LedgerReader.ReadResult<InputStream>> readResults = resultHolder.get();
                 if (null == readResults) {
                     throw new IOException("Failed to read entry " + eid);
                 }
                 boolean printHeader = true;
-                for (LedgerReader.ReadResult<ByteBuf> rr : readResults) {
+                for (LedgerReader.ReadResult<InputStream> rr : readResults) {
                     if (corruptOnly) {
                         if (BKException.Code.DigestMatchException == rr.getResultCode()) {
                             if (printHeader) {
@@ -2032,10 +2285,9 @@ import org.slf4j.LoggerFactory;
                             Entry.Reader reader = Entry.newBuilder()
                                     .setLogSegmentInfo(lh.getId(), 0L)
                                     .setEntryId(eid)
-                                    .setEntry(rr.getValue())
+                                    .setInputStream(rr.getValue())
                                     .setEnvelopeEntry(LogSegmentMetadata.supportsEnvelopedEntries(metadataVersion))
                                     .buildReader();
-                            rr.getValue().release();
                             printEntry(reader);
                         } else {
                             System.out.println("status = " + BKException.getMessage(rr.getResultCode()));
@@ -2046,15 +2298,13 @@ import org.slf4j.LoggerFactory;
             }
         }
 
-        private void readLacsFromAllBookies(LedgerReader ledgerReader,
-                                            LedgerHandle lh, long fromEntryId, long untilEntryId)
+        private void readLacsFromAllBookies(LedgerReader ledgerReader, LedgerHandle lh, long fromEntryId, long untilEntryId)
                 throws Exception {
             for (long eid = fromEntryId; eid <= untilEntryId; ++eid) {
                 final CountDownLatch doneLatch = new CountDownLatch(1);
                 final AtomicReference<Set<LedgerReader.ReadResult<Long>>> resultHolder =
                         new AtomicReference<Set<LedgerReader.ReadResult<Long>>>();
-                ledgerReader.readLacs(lh, eid,
-                        new BookkeeperInternalCallbacks.GenericCallback<Set<LedgerReader.ReadResult<Long>>>() {
+                ledgerReader.readLacs(lh, eid, new BookkeeperInternalCallbacks.GenericCallback<Set<LedgerReader.ReadResult<Long>>>() {
                     @Override
                     public void operationComplete(int rc, Set<LedgerReader.ReadResult<Long>> readResults) {
                         if (BKException.Code.OK == rc) {
@@ -2094,10 +2344,9 @@ import org.slf4j.LoggerFactory;
                 Entry.Reader reader = Entry.newBuilder()
                         .setLogSegmentInfo(0L, 0L)
                         .setEntryId(entry.getEntryId())
-                        .setEntry(entry.getEntryBuffer())
+                        .setInputStream(entry.getEntryInputStream())
                         .setEnvelopeEntry(LogSegmentMetadata.supportsEnvelopedEntries(metadataVersion))
                         .buildReader();
-                entry.getEntryBuffer().release();
                 printEntry(reader);
                 ++i;
             }
@@ -2125,10 +2374,7 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command associated with audit.
-     */
-    protected abstract static class AuditCommand extends OptsCommand {
+    protected static abstract class AuditCommand extends OptsCommand {
 
         protected final Options options = new Options();
         protected final DistributedLogConfiguration dlConf;
@@ -2231,7 +2477,7 @@ import org.slf4j.LoggerFactory;
             }
             if (cmdline.hasOption("ap")) {
                 String[] aps = cmdline.getOptionValue("ap").split(",");
-                for (String ap : aps) {
+                for(String ap : aps) {
                     List<String> list = new ArrayList<String>();
                     String[] array = ap.split(";");
                     Collections.addAll(list, array);
@@ -2280,9 +2526,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Audit stream space usage for a given dl uri.
-     */
     public static class AuditDLSpaceCommand extends PerDLCommand {
 
         private String regex = null;
@@ -2347,9 +2590,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Audit bk space usage for a given dl uri.
-     */
     public static class AuditBKSpaceCommand extends PerDLCommand {
 
         AuditBKSpaceCommand() {
@@ -2374,9 +2614,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command used to truncate a stream at a specific position.
-     */
     protected static class TruncateStreamCommand extends PerStreamCommand {
 
         DLSN dlsn = DLSN.InvalidDLSN;
@@ -2410,8 +2647,7 @@ import org.slf4j.LoggerFactory;
                 long totalRecords = dlm.getLogRecordCount();
                 long recordsAfterTruncate = FutureUtils.result(dlm.getLogRecordCountAsync(dlsn));
                 long recordsToTruncate = totalRecords - recordsAfterTruncate;
-                if (!getForce() && !IOUtils.confirmPrompt("Do you want to truncate "
-                        + streamName + " at dlsn " + dlsn + " (" + recordsToTruncate + " records)?")) {
+                if (!getForce() && !IOUtils.confirmPrompt("Do you want to truncate " + streamName + " at dlsn " + dlsn + " (" + recordsToTruncate + " records)?")) {
                     return 0;
                 } else {
                     AsyncLogWriter writer = dlm.startAsyncLogSegmentNonPartitioned();
@@ -2433,9 +2669,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command used to Deserialize DLSN.
-     */
     public static class DeserializeDLSNCommand extends SimpleCommand {
 
         String base64Dlsn = "";
@@ -2460,9 +2693,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command used to Serialize DLSN.
-     */
     public static class SerializeDLSNCommand extends SimpleCommand {
 
         private DLSN dlsn = DLSN.InitialDLSN;
@@ -2494,9 +2724,6 @@ import org.slf4j.LoggerFactory;
         }
     }
 
-    /**
-     * Command used to Delete the subscriber in subscription store.
-     */
     public static class DeleteSubscriberCommand extends PerDLCommand {
 
         int numThreads = 1;
@@ -2627,8 +2854,7 @@ import org.slf4j.LoggerFactory;
         addCommand(new ListCommand());
         addCommand(new ReadLastConfirmedCommand());
         addCommand(new ReadEntriesCommand());
-        // TODO: Fix it later, tracking by https://github.com/apache/distributedlog/issues/150
-        // addCommand(new RecoverCommand());
+        addCommand(new RecoverCommand());
         addCommand(new RecoverLedgerCommand());
         addCommand(new ShowCommand());
         addCommand(new TruncateCommand());

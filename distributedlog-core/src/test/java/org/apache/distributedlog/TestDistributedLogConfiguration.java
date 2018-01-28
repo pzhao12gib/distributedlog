@@ -17,20 +17,18 @@
  */
 package org.apache.distributedlog;
 
-import static org.junit.Assert.*;
 import com.google.common.base.Optional;
-import java.util.List;
-import org.apache.bookkeeper.net.DNSToSwitchMapping;
-import org.apache.commons.configuration.StrictConfigurationComparator;
+
 import org.apache.distributedlog.net.DNSResolverForRacks;
 import org.apache.distributedlog.net.DNSResolverForRows;
+import org.apache.bookkeeper.net.DNSToSwitchMapping;
+import org.apache.commons.configuration.StrictConfigurationComparator;
 import org.junit.Test;
 
+import java.util.List;
 
+import static org.junit.Assert.*;
 
-/**
- * Test Cases for truncation.
- */
 public class TestDistributedLogConfiguration {
 
     static final class TestDNSResolver implements DNSToSwitchMapping {
@@ -57,12 +55,12 @@ public class TestDistributedLogConfiguration {
             DistributedLogConfiguration.BKDL_READER_IDLE_ERROR_THRESHOLD_MILLIS_DEFAULT);
         DistributedLogConfiguration override = new DistributedLogConfiguration();
         override.setPeriodicFlushFrequencyMilliSeconds(
-            DistributedLogConfiguration.BKDL_PERIODIC_FLUSH_FREQUENCY_MILLISECONDS_DEFAULT + 1);
+            DistributedLogConfiguration.BKDL_PERIODIC_FLUSH_FREQUENCY_MILLISECONDS_DEFAULT+1);
         override.setReaderIdleErrorThresholdMillis(
             DistributedLogConfiguration.BKDL_READER_IDLE_ERROR_THRESHOLD_MILLIS_DEFAULT - 1);
         conf.loadStreamConf(Optional.of(override));
         assertEquals(conf.getPeriodicFlushFrequencyMilliSeconds(),
-            DistributedLogConfiguration.BKDL_PERIODIC_FLUSH_FREQUENCY_MILLISECONDS_DEFAULT + 1);
+            DistributedLogConfiguration.BKDL_PERIODIC_FLUSH_FREQUENCY_MILLISECONDS_DEFAULT+1);
         assertEquals(conf.getReaderIdleErrorThresholdMillis(),
             DistributedLogConfiguration.BKDL_READER_IDLE_ERROR_THRESHOLD_MILLIS_DEFAULT - 1);
     }
@@ -75,7 +73,7 @@ public class TestDistributedLogConfiguration {
             DistributedLogConfiguration.BKDL_BKCLIENT_WRITE_TIMEOUT_DEFAULT);
         DistributedLogConfiguration override = new DistributedLogConfiguration();
         override.setBKClientWriteTimeout(
-            DistributedLogConfiguration.BKDL_BKCLIENT_WRITE_TIMEOUT_DEFAULT + 1);
+            DistributedLogConfiguration.BKDL_BKCLIENT_WRITE_TIMEOUT_DEFAULT+1);
         conf.loadStreamConf(Optional.of(override));
         assertEquals(conf.getBKClientWriteTimeout(),
             DistributedLogConfiguration.BKDL_BKCLIENT_WRITE_TIMEOUT_DEFAULT);
@@ -84,7 +82,7 @@ public class TestDistributedLogConfiguration {
     @Test(timeout = 20000)
     public void loadStreamConfNullOverrides() throws Exception {
         DistributedLogConfiguration conf = new DistributedLogConfiguration();
-        DistributedLogConfiguration confClone = new DistributedLogConfiguration();
+        DistributedLogConfiguration confClone = (DistributedLogConfiguration)conf.clone();
         Optional<DistributedLogConfiguration> streamConfiguration = Optional.absent();
         conf.loadStreamConf(streamConfiguration);
 
@@ -107,7 +105,7 @@ public class TestDistributedLogConfiguration {
 
     @Test(timeout = 200000)
     public void validateConfiguration(){
-        boolean exceptionThrown = false;
+        boolean exceptionThrown=false;
         DistributedLogConfiguration conf = new DistributedLogConfiguration();
         // validate default configuration
         conf.validate();
@@ -116,16 +114,16 @@ public class TestDistributedLogConfiguration {
         try {
             conf.validate();
         } catch (IllegalArgumentException e){
-            exceptionThrown = true;
+            exceptionThrown=true;
         }
         assertFalse(exceptionThrown);
         // test invalid case, should throw exception
-        exceptionThrown = false;
+        exceptionThrown=false;
         conf.setReadLACLongPollTimeout(conf.getBKClientReadTimeout() * 1000 * 2);
         try {
             conf.validate();
         } catch (IllegalArgumentException e){
-            exceptionThrown = true;
+            exceptionThrown=true;
         }
         assertTrue(exceptionThrown);
     }

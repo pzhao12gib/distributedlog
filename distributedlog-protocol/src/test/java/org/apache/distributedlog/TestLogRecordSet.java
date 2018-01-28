@@ -25,22 +25,19 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.Lists;
-import io.netty.buffer.ByteBuf;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.distributedlog.LogRecordSet.Reader;
 import org.apache.distributedlog.LogRecordSet.Writer;
-import org.apache.distributedlog.common.concurrent.FutureUtils;
 import org.apache.distributedlog.exceptions.LogRecordTooLongException;
 import org.apache.distributedlog.io.CompressionCodec.Type;
+import org.apache.distributedlog.common.concurrent.FutureUtils;
 import org.junit.Test;
 
 /**
  * Test Case for {@link LogRecordSet}.
  */
-@Slf4j
 public class TestLogRecordSet {
 
     @Test(timeout = 60000)
@@ -49,19 +46,21 @@ public class TestLogRecordSet {
         assertEquals("zero user bytes", HEADER_LEN, writer.getNumBytes());
         assertEquals("zero records", 0, writer.getNumRecords());
 
-        ByteBuf buffer = writer.getBuffer();
-        assertEquals("zero user bytes", HEADER_LEN, buffer.readableBytes());
+        ByteBuffer buffer = writer.getBuffer();
+        assertEquals("zero user bytes", HEADER_LEN, buffer.remaining());
+
+        byte[] data = new byte[buffer.remaining()];
+        buffer.get(data);
 
         LogRecordWithDLSN record = new LogRecordWithDLSN(
                 new DLSN(1L, 0L, 0L),
                 1L,
-                buffer,
+                data,
                 1L);
         record.setRecordSet();
         Reader reader = LogRecordSet.of(record);
         assertNull("Empty record set should return null",
                 reader.nextRecord());
-        reader.release();
     }
 
     @Test(timeout = 60000)
@@ -79,19 +78,21 @@ public class TestLogRecordSet {
         }
         assertEquals("zero user bytes", HEADER_LEN, writer.getNumBytes());
         assertEquals("zero records", 0, writer.getNumRecords());
-        ByteBuf buffer = writer.getBuffer();
-        assertEquals("zero user bytes", HEADER_LEN, buffer.readableBytes());
+        ByteBuffer buffer = writer.getBuffer();
+        assertEquals("zero user bytes", HEADER_LEN, buffer.remaining());
+
+        byte[] data = new byte[buffer.remaining()];
+        buffer.get(data);
 
         LogRecordWithDLSN record = new LogRecordWithDLSN(
                 new DLSN(1L, 0L, 0L),
                 1L,
-                buffer,
+                data,
                 1L);
         record.setRecordSet();
         Reader reader = LogRecordSet.of(record);
         assertNull("Empty record set should return null",
                 reader.nextRecord());
-        reader.release();
     }
 
     @Test(timeout = 20000)
@@ -136,7 +137,7 @@ public class TestLogRecordSet {
             assertEquals((i + 6) + " records", (i + 6), writer.getNumRecords());
         }
 
-        ByteBuf buffer = writer.getBuffer();
+        ByteBuffer buffer = writer.getBuffer();
         assertEquals("10 records", 10, writer.getNumRecords());
 
         // Test transmit complete
@@ -146,10 +147,14 @@ public class TestLogRecordSet {
             assertEquals(new DLSN(1L, 1L, 10L + i), writeResults.get(i));
         }
 
+        // Test reading from buffer
+        byte[] data = new byte[buffer.remaining()];
+        buffer.get(data);
+
         LogRecordWithDLSN record = new LogRecordWithDLSN(
                 new DLSN(1L, 1L, 10L),
                 99L,
-                buffer,
+                data,
                 999L);
         record.setPositionWithinLogSegment(888);
         record.setRecordSet();
@@ -167,7 +172,6 @@ public class TestLogRecordSet {
             readRecord = reader.nextRecord();
         }
         assertEquals(10, numReads);
-        reader.release();
     }
 
 }

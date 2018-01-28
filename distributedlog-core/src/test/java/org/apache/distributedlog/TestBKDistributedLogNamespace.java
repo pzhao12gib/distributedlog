@@ -17,8 +17,6 @@
  */
 package org.apache.distributedlog;
 
-import static org.junit.Assert.*;
-import com.google.common.collect.Sets;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Collection;
@@ -28,17 +26,19 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+
+import com.google.common.collect.Sets;
 import org.apache.distributedlog.api.DistributedLogManager;
 import org.apache.distributedlog.api.LogReader;
 import org.apache.distributedlog.api.LogWriter;
 import org.apache.distributedlog.api.namespace.Namespace;
-import org.apache.distributedlog.api.namespace.NamespaceBuilder;
 import org.apache.distributedlog.callback.NamespaceListener;
 import org.apache.distributedlog.exceptions.AlreadyClosedException;
 import org.apache.distributedlog.exceptions.InvalidStreamNameException;
 import org.apache.distributedlog.exceptions.LockingException;
 import org.apache.distributedlog.exceptions.ZKException;
 import org.apache.distributedlog.impl.BKNamespaceDriver;
+import org.apache.distributedlog.api.namespace.NamespaceBuilder;
 import org.apache.distributedlog.util.DLUtils;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
@@ -54,10 +54,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
+import static org.junit.Assert.*;
 
-/**
- * Test Cases for {@link Namespace}.
- */
 public class TestBKDistributedLogNamespace extends TestDistributedLogBase {
 
     @Rule
@@ -107,7 +105,7 @@ public class TestBKDistributedLogNamespace extends TestDistributedLogBase {
         try {
             writer = dlm.startLogSegmentNonPartitioned();
             writer.write(DLMTestUtil.getLogRecordInstance(1L));
-            writer.commit();
+            writer.flushAndSync();
             fail("Should fail to write data if stream doesn't exist.");
         } catch (IOException ioe) {
             // expected

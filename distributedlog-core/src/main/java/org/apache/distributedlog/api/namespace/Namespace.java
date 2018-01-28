@@ -17,20 +17,20 @@
  */
 package org.apache.distributedlog.api.namespace;
 
-import java.io.IOException;
-import java.util.Iterator;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import org.apache.bookkeeper.common.annotation.InterfaceAudience.Public;
-import org.apache.bookkeeper.common.annotation.InterfaceStability.Evolving;
-import org.apache.bookkeeper.stats.StatsLogger;
+import com.google.common.annotations.Beta;
+import com.google.common.base.Optional;
 import org.apache.distributedlog.DistributedLogConfiguration;
-import org.apache.distributedlog.acl.AccessControlManager;
 import org.apache.distributedlog.api.DistributedLogManager;
+import org.apache.distributedlog.exceptions.LogNotFoundException;
+import org.apache.distributedlog.acl.AccessControlManager;
 import org.apache.distributedlog.callback.NamespaceListener;
 import org.apache.distributedlog.config.DynamicDistributedLogConfiguration;
 import org.apache.distributedlog.exceptions.InvalidStreamNameException;
-import org.apache.distributedlog.exceptions.LogNotFoundException;
+
+import java.io.IOException;
+import java.util.Iterator;
+
+import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.distributedlog.namespace.NamespaceDriver;
 
 /**
@@ -50,28 +50,26 @@ import org.apache.distributedlog.namespace.NamespaceDriver;
  *
  * <h4>Namespace Location</h4>
  *
- * <p>At the highest level, a <code>Namespace</code> is located by a <code>URI</code>. The location
- * URI is in string form has the syntax</p>
+ * At the highest level, a <code>Namespace</code> is located by a <code>URI</code>. The location
+ * URI is in string form has the syntax
  *
  * <blockquote>
  * distributedlog[<tt><b>-</b></tt><i>provider</i>]<tt><b>:</b></tt><i>provider-specific-path</i>
  * </blockquote>
  *
- * <p>where square brackets [...] delineate optional components and the characters
- * <tt><b>-</b></tt> and <tt><b>:</b></tt>
- * stand for themselves.</p>
+ * where square brackets [...] delineate optional components and the characters <tt><b>-</b></tt> and <tt><b>:</b></tt>
+ * stand for themselves.
  *
- * <p>The <code>provider</code> part in the URI indicates what is the backend used for this namespace. For example:
+ * The <code>provider</code> part in the URI indicates what is the backend used for this namespace. For example:
  * <i>distributedlog-bk</i> URI is storing logs in bookkeeper, while <i>distributedlog-mem</i> URI is storing logs in
  * memory. The <code>provider</code> part is optional. It would use bookkeeper backend if the <i>provider</i> part
- * is omitted.</p>
+ * is omitted.
  *
  * @see DistributedLogManager
  * @since 0.3.32
  */
-@Public
-@Evolving
-public interface Namespace extends AutoCloseable{
+@Beta
+public interface Namespace {
 
     /**
      * Get the namespace driver used by this namespace.
@@ -106,19 +104,6 @@ public interface Namespace extends AutoCloseable{
      */
     void deleteLog(String logName)
             throws InvalidStreamNameException, LogNotFoundException, IOException;
-
-    /**
-     * Rename a log from <i>oldName</i> to <i>newName</i>.
-     *
-     * @param oldName old log name
-     * @param newName new log name
-     * @return a future represents the rename result.
-     * @throws InvalidStreamNameException if log name is invalid
-     * @throws LogNotFoundException if old log doesn't exist
-     * @throws org.apache.distributedlog.exceptions.LogExistsException if the new log exists
-     * @throws IOException when encountered issues with backend.
-     */
-    CompletableFuture<Void> renameLog(String oldName, String newName);
 
     /**
      * Open a log named <i>logName</i>.
@@ -177,16 +162,6 @@ public interface Namespace extends AutoCloseable{
     Iterator<String> getLogs()
             throws IOException;
 
-    /**
-     * Retrieve the logs under a given <i>logNamePrefix</i>.
-     *
-     * @param logNamePrefix log name prefix
-     * @return iterator of the logs under the log name prefix
-     * @throws IOException when encountered issues with backend.
-     */
-    Iterator<String> getLogs(String logNamePrefix)
-            throws IOException;
-
     //
     // Methods for namespace
     //
@@ -211,7 +186,6 @@ public interface Namespace extends AutoCloseable{
     /**
      * Close the namespace.
      */
-    @Override
     void close();
 
 }

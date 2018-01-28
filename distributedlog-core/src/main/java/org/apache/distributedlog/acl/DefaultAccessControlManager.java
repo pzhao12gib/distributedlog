@@ -17,9 +17,6 @@
  */
 package org.apache.distributedlog.acl;
 
-/**
- * Default Access Control.
- */
 public class DefaultAccessControlManager implements AccessControlManager {
 
     public static final DefaultAccessControlManager INSTANCE = new DefaultAccessControlManager();

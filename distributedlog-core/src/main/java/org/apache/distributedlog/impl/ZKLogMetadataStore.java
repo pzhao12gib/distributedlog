@@ -17,30 +17,28 @@
  */
 package org.apache.distributedlog.impl;
 
-import static org.apache.distributedlog.util.DLUtils.*;
-
 import com.google.common.base.Optional;
 import com.google.common.collect.Lists;
 import java.net.URI;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import org.apache.commons.lang.StringUtils;
 import org.apache.distributedlog.DistributedLogConfiguration;
 import org.apache.distributedlog.ZooKeeperClient;
 import org.apache.distributedlog.callback.NamespaceListener;
-import org.apache.distributedlog.common.concurrent.FutureUtils;
 import org.apache.distributedlog.exceptions.ZKException;
 import org.apache.distributedlog.metadata.LogMetadataStore;
+import org.apache.distributedlog.common.concurrent.FutureUtils;
 import org.apache.distributedlog.util.OrderedScheduler;
 import org.apache.zookeeper.AsyncCallback;
 import org.apache.zookeeper.KeeperException;
 import org.apache.zookeeper.ZooKeeper;
 import org.apache.zookeeper.data.Stat;
 
+import static org.apache.distributedlog.util.DLUtils.*;
 
 /**
- * ZooKeeper based log metadata store.
+ * ZooKeeper based log metadata store
  */
 public class ZKLogMetadataStore implements LogMetadataStore {
 
@@ -71,14 +69,9 @@ public class ZKLogMetadataStore implements LogMetadataStore {
     }
 
     @Override
-    public CompletableFuture<Iterator<String>> getLogs(String logNamePrefix) {
+    public CompletableFuture<Iterator<String>> getLogs() {
         final CompletableFuture<Iterator<String>> promise = new CompletableFuture<Iterator<String>>();
-        final String nsRootPath;
-        if (StringUtils.isEmpty(logNamePrefix)) {
-            nsRootPath = namespace.getPath();
-        } else {
-            nsRootPath = namespace.getPath() + "/" + logNamePrefix;
-        }
+        final String nsRootPath = namespace.getPath();
         try {
             final ZooKeeper zk = zkc.get();
             zk.sync(nsRootPath, new AsyncCallback.VoidCallback() {
@@ -87,8 +80,7 @@ public class ZKLogMetadataStore implements LogMetadataStore {
                     if (KeeperException.Code.OK.intValue() == syncRc) {
                         zk.getChildren(nsRootPath, false, new AsyncCallback.Children2Callback() {
                             @Override
-                            public void processResult(int rc, String path, Object ctx,
-                                                      List<String> children, Stat stat) {
+                            public void processResult(int rc, String path, Object ctx, List<String> children, Stat stat) {
                                 if (KeeperException.Code.OK.intValue() == rc) {
                                     List<String> results = Lists.newArrayListWithExpectedSize(children.size());
                                     for (String child : children) {
@@ -101,8 +93,8 @@ public class ZKLogMetadataStore implements LogMetadataStore {
                                     List<String> streams = Lists.newLinkedList();
                                     promise.complete(streams.iterator());
                                 } else {
-                                    promise.completeExceptionally(new ZKException("Error reading namespace "
-                                            + nsRootPath, KeeperException.Code.get(rc)));
+                                    promise.completeExceptionally(new ZKException("Error reading namespace " + nsRootPath,
+                                            KeeperException.Code.get(rc)));
                                 }
                             }
                         }, null);

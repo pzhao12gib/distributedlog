@@ -17,9 +17,11 @@
  */
 package org.apache.distributedlog;
 
-import io.netty.buffer.ByteBuf;
-import java.io.IOException;
 import org.apache.distributedlog.exceptions.InvalidEnvelopedEntryException;
+import org.apache.distributedlog.io.Buffer;
+import org.apache.distributedlog.io.TransmitListener;
+
+import java.io.IOException;
 
 /**
  * Write representation of a {@link Entry}.
@@ -59,12 +61,10 @@ interface EntryBuffer extends TransmitListener {
     /**
      * Get the buffer to transmit.
      *
-     * <p>The caller is responsible for releasing the reference of the returned bytebuf object.
-     *
      * @return the buffer to transmit.
      * @throws InvalidEnvelopedEntryException if the record set buffer is invalid
      * @throws IOException when encountered IOException during serialization
      */
-    ByteBuf getBuffer() throws InvalidEnvelopedEntryException, IOException;
+    Buffer getBuffer() throws InvalidEnvelopedEntryException, IOException;
 
 }

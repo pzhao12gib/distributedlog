@@ -23,15 +23,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Utils to Failpoint.
- */
 public class FailpointUtils {
-    private static final Logger logger = LoggerFactory.getLogger(FailpointUtils.class);
+    static final Logger logger = LoggerFactory.getLogger(FailpointUtils.class);
 
-    /**
-     *  enum for FailPointName.
-     */
     public enum FailPointName {
         FP_StartLogSegmentBeforeLedgerCreate,
         FP_StartLogSegmentAfterLedgerCreate,
@@ -50,18 +44,12 @@ public class FailpointUtils {
         FP_LogWriterIssuePending,
     }
 
-    /**
-     *  interface for FailPointAction.
-     */
-    public interface FailPointAction {
+    public static interface FailPointAction {
         boolean checkFailPoint() throws IOException;
         boolean checkFailPointNoThrow();
     }
 
-    /**
-     *  AbstractFailPointAction.
-     */
-    public abstract  static  class AbstractFailPointAction implements FailPointAction {
+    public static abstract class AbstractFailPointAction implements FailPointAction {
         @Override
         public boolean checkFailPointNoThrow() {
             try {
@@ -86,9 +74,7 @@ public class FailpointUtils {
             throw new IOException("Throw ioexception for failure point");
         }
     };
-    /**
-     * enum for fail point actions.
-     */
+
     public enum FailPointActions {
         FailPointAction_Default,
         FailPointAction_Throw

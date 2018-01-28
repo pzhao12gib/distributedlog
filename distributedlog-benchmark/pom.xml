@@ -20,7 +20,7 @@
   <parent>
     <groupId>org.apache.distributedlog</groupId>
     <artifactId>distributedlog</artifactId>
-    <version>0.6.0-SNAPSHOT</version>
+    <version>0.5.0-SNAPSHOT</version>
   </parent>
   <artifactId>distributedlog-benchmark</artifactId>
   <name>Apache DistributedLog :: Benchmark</name>
@@ -134,7 +134,7 @@
         </dependencies>
         <configuration>
           <configLocation>distributedlog/checkstyle.xml</configLocation>
-          <suppressionsLocation>distributedlog/suppressions-packages.xml</suppressionsLocation>
+          <suppressionsLocation>distributedlog/suppressions.xml</suppressionsLocation>
           <consoleOutput>true</consoleOutput>
           <failOnViolation>true</failOnViolation>
           <includeResources>false</includeResources>
@@ -142,7 +142,7 @@
         </configuration>
         <executions>
           <execution>
-            <phase>validate</phase>
+            <phase>test-compile</phase>
             <goals>
               <goal>check</goal>
             </goals>

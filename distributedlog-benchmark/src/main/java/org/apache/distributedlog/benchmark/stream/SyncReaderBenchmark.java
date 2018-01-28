@@ -98,11 +98,10 @@ public class SyncReaderBenchmark extends AbstractReaderBenchmark {
             try {
                 reader = dlm.getInputStream(lastTxId);
                 long elapsedMs = stopwatch.elapsed(TimeUnit.MICROSECONDS);
-                openReaderStats.registerSuccessfulEvent(elapsedMs, TimeUnit.MICROSECONDS);
+                openReaderStats.registerSuccessfulEvent(elapsedMs);
                 logger.info("It took {} ms to position the reader to transaction id {}", lastTxId);
             } catch (IOException ioe) {
-                openReaderStats.registerFailedEvent(
-                    stopwatch.elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+                openReaderStats.registerFailedEvent(stopwatch.elapsed(TimeUnit.MICROSECONDS));
                 logger.warn("Failed to create reader for stream {} reading from {}.", streamName, lastTxId);
             }
             if (null == reader) {
@@ -130,11 +129,11 @@ public class SyncReaderBenchmark extends AbstractReaderBenchmark {
                     if (null != record) {
                         long elapsedMicros = stopwatch.stop().elapsed(TimeUnit.MICROSECONDS);
                         if (nonBlocking) {
-                            nonBlockingReadStats.registerSuccessfulEvent(elapsedMicros, TimeUnit.MICROSECONDS);
+                            nonBlockingReadStats.registerSuccessfulEvent(elapsedMicros);
                         } else {
                             numCatchupBytes += record.getPayload().length;
                             ++numCatchupReads;
-                            blockingReadStats.registerSuccessfulEvent(elapsedMicros, TimeUnit.MICROSECONDS);
+                            blockingReadStats.registerSuccessfulEvent(elapsedMicros);
                         }
                         lastTxId = record.getTransactionId();
                     } else {

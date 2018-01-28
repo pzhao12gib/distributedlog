@@ -36,9 +36,6 @@ import org.apache.bookkeeper.stats.OpStatsLogger;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.bookkeeper.versioning.Version;
 import org.apache.bookkeeper.versioning.Versioned;
-import org.apache.distributedlog.common.concurrent.FutureEventListener;
-import org.apache.distributedlog.common.concurrent.FutureUtils;
-import org.apache.distributedlog.common.util.PermitLimiter;
 import org.apache.distributedlog.config.DynamicDistributedLogConfiguration;
 import org.apache.distributedlog.exceptions.DLIllegalStateException;
 import org.apache.distributedlog.exceptions.EndOfStreamException;
@@ -47,25 +44,26 @@ import org.apache.distributedlog.exceptions.LogSegmentNotFoundException;
 import org.apache.distributedlog.exceptions.TransactionIdOutOfOrderException;
 import org.apache.distributedlog.exceptions.UnexpectedException;
 import org.apache.distributedlog.function.GetLastTxIdFunction;
-import org.apache.distributedlog.lock.DistributedLock;
 import org.apache.distributedlog.logsegment.LogSegmentEntryStore;
 import org.apache.distributedlog.logsegment.LogSegmentEntryWriter;
+import org.apache.distributedlog.metadata.LogMetadataForWriter;
+import org.apache.distributedlog.lock.DistributedLock;
 import org.apache.distributedlog.logsegment.LogSegmentFilter;
 import org.apache.distributedlog.logsegment.LogSegmentMetadataCache;
 import org.apache.distributedlog.logsegment.RollingPolicy;
 import org.apache.distributedlog.logsegment.SizeBasedRollingPolicy;
 import org.apache.distributedlog.logsegment.TimeBasedRollingPolicy;
-import org.apache.distributedlog.metadata.LogMetadataForWriter;
-import org.apache.distributedlog.metadata.LogSegmentMetadataStoreUpdater;
 import org.apache.distributedlog.metadata.LogStreamMetadataStore;
 import org.apache.distributedlog.metadata.MetadataUpdater;
+import org.apache.distributedlog.metadata.LogSegmentMetadataStoreUpdater;
 import org.apache.distributedlog.util.Allocator;
 import org.apache.distributedlog.util.DLUtils;
 import org.apache.distributedlog.util.FailpointUtils;
-
-
+import org.apache.distributedlog.common.concurrent.FutureEventListener;
+import org.apache.distributedlog.common.concurrent.FutureUtils;
 import org.apache.distributedlog.util.OrderedScheduler;
 import org.apache.distributedlog.util.Transaction;
+import org.apache.distributedlog.common.util.PermitLimiter;
 import org.apache.distributedlog.util.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,7 +81,7 @@ import org.slf4j.LoggerFactory;
  * </ul>
  */
 class BKLogWriteHandler extends BKLogHandler {
-    static final Logger LOG = LoggerFactory.getLogger(BKLogWriteHandler.class);
+    static final Logger LOG = LoggerFactory.getLogger(BKLogReadHandler.class);
 
     private static Transaction.OpListener<LogSegmentEntryWriter> NULL_OP_LISTENER =
             new Transaction.OpListener<LogSegmentEntryWriter>() {
@@ -364,18 +362,10 @@ class BKLogWriteHandler extends BKLogHandler {
     }
 
     /**
-     * Delete the whole log and all log segments under the log.
-     */
-    void deleteLog() throws IOException {
-        lock.checkOwnershipAndReacquire();
-        Utils.ioResult(purgeLogSegmentsOlderThanTxnId(-1));
-        Utils.closeQuietly(lock);
-    }
-
-    /**
      * The caller could call this before any actions, which to hold the lock for
      * the write handler of its whole lifecycle. The lock will only be released
      * when closing the write handler.
+     *
      * This method is useful to prevent releasing underlying zookeeper lock during
      * recovering/completing log segments. Releasing underlying zookeeper lock means
      * 1) increase latency when re-lock on starting new log segment. 2) increase the
@@ -440,11 +430,9 @@ class BKLogWriteHandler extends BKLogHandler {
             return writer;
         } finally {
             if (success) {
-                openOpStats.registerSuccessfulEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+                openOpStats.registerSuccessfulEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             } else {
-                openOpStats.registerFailedEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+                openOpStats.registerFailedEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             }
         }
     }
@@ -475,9 +463,8 @@ class BKLogWriteHandler extends BKLogHandler {
 
         // We only skip log segment sequence number validation only when no log segments found &
         // the maximum log segment sequence number is "UNASSIGNED".
-        if (!logSegmentsFound
-                && (DistributedLogConstants.UNASSIGNED_LOGSEGMENT_SEQNO
-                == maxLogSegmentSequenceNo.getSequenceNumber())) {
+        if (!logSegmentsFound &&
+            (DistributedLogConstants.UNASSIGNED_LOGSEGMENT_SEQNO == maxLogSegmentSequenceNo.getSequenceNumber())) {
             // no ledger seqno stored in /ledgers before
             LOG.info("No max ledger sequence number found while creating log segment {} for {}.",
                 logSegmentSeqNo, getFullyQualifiedName());
@@ -494,8 +481,7 @@ class BKLogWriteHandler extends BKLogHandler {
         return logSegmentSeqNo;
     }
 
-    protected BKLogSegmentWriter doStartLogSegment(long txId,
-                                                   boolean bestEffort, boolean allowMaxTxID) throws IOException {
+    protected BKLogSegmentWriter doStartLogSegment(long txId, boolean bestEffort, boolean allowMaxTxID) throws IOException {
         return Utils.ioResult(asyncStartLogSegment(txId, bestEffort, allowMaxTxID));
     }
 
@@ -528,8 +514,8 @@ class BKLogWriteHandler extends BKLogHandler {
                                      final boolean allowMaxTxID,
                                      final CompletableFuture<BKLogSegmentWriter> promise) {
         // validate the tx id
-        if ((txId < 0)
-                || (!allowMaxTxID && (txId == DistributedLogConstants.MAX_TXID))) {
+        if ((txId < 0) ||
+                (!allowMaxTxID && (txId == DistributedLogConstants.MAX_TXID))) {
             FutureUtils.completeExceptionally(promise, new IOException("Invalid Transaction Id " + txId));
             return;
         }
@@ -538,13 +524,11 @@ class BKLogWriteHandler extends BKLogHandler {
         if (txId < highestTxIdWritten) {
             if (highestTxIdWritten == DistributedLogConstants.MAX_TXID) {
                 LOG.error("We've already marked the stream as ended and attempting to start a new log segment");
-                FutureUtils.completeExceptionally(promise,
-                        new EndOfStreamException("Writing to a stream after it has been marked as completed"));
+                FutureUtils.completeExceptionally(promise, new EndOfStreamException("Writing to a stream after it has been marked as completed"));
                 return;
             } else {
                 LOG.error("We've already seen TxId {} the max TXId is {}", txId, highestTxIdWritten);
-                FutureUtils.completeExceptionally(promise,
-                        new TransactionIdOutOfOrderException(txId, highestTxIdWritten));
+                FutureUtils.completeExceptionally(promise, new TransactionIdOutOfOrderException(txId, highestTxIdWritten));
                 return;
             }
         }
@@ -699,17 +683,14 @@ class BKLogWriteHandler extends BKLogHandler {
             @Override
             public void onSuccess(Void value) {
                 // in theory closeToFinalize should throw exception if a stream is in error.
-                // just in case, add another checking here to make sure
-                // we don't close log segment is a stream is in error.
+                // just in case, add another checking here to make sure we don't close log segment is a stream is in error.
                 if (writer.shouldFailCompleteLogSegment()) {
                     FutureUtils.completeExceptionally(promise,
-                            new IOException("LogSegmentWriter for " + writer.getFullyQualifiedLogSegment()
-                                    + " is already in error."));
+                            new IOException("LogSegmentWriter for " + writer.getFullyQualifiedLogSegment() + " is already in error."));
                     return;
                 }
                 doCompleteAndCloseLogSegment(
-                        inprogressZNodeName(writer.getLogSegmentId(), writer.getStartTxId(),
-                                writer.getLogSegmentSequenceNumber()),
+                        inprogressZNodeName(writer.getLogSegmentId(), writer.getStartTxId(), writer.getLogSegmentSequenceNumber()),
                         writer.getLogSegmentSequenceNumber(),
                         writer.getLogSegmentId(),
                         writer.getStartTxId(),
@@ -734,8 +715,8 @@ class BKLogWriteHandler extends BKLogHandler {
                                                   long lastTxId,
                                                   int recordCount)
         throws IOException {
-        return completeAndCloseLogSegment(inprogressZNodeName(logSegmentId, firstTxId, logSegmentSeqNo),
-                logSegmentSeqNo, logSegmentId, firstTxId, lastTxId, recordCount, -1, -1);
+        return completeAndCloseLogSegment(inprogressZNodeName(logSegmentId, firstTxId, logSegmentSeqNo), logSegmentSeqNo,
+            logSegmentId, firstTxId, lastTxId, recordCount, -1, -1);
     }
 
     /**
@@ -762,13 +743,9 @@ class BKLogWriteHandler extends BKLogHandler {
             return completedLogSegment;
         } finally {
             if (success) {
-                closeOpStats.registerSuccessfulEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS),
-                    TimeUnit.MICROSECONDS);
+                closeOpStats.registerSuccessfulEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             } else {
-                closeOpStats.registerFailedEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS),
-                    TimeUnit.MICROSECONDS);
+                closeOpStats.registerFailedEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             }
         }
     }
@@ -792,7 +769,7 @@ class BKLogWriteHandler extends BKLogHandler {
     }
 
     /**
-     * Close log segment.
+     * Close log segment
      *
      * @param inprogressZnodeName
      * @param logSegmentSeqNo
@@ -902,14 +879,12 @@ class BKLogWriteHandler extends BKLogHandler {
                     return;
                 }
                 long leastInprogressLSSN = inprogressLSSNs.getFirst();
-                // the log segment sequence number in metadata
-                // {@link inprogressLogSegment.getLogSegmentSequenceNumber()}
+                // the log segment sequence number in metadata {@link inprogressLogSegment.getLogSegmentSequenceNumber()}
                 // should be same as the sequence number we are completing (logSegmentSeqNo)
                 // and
-                // it should also be same as the least inprogress log segment sequence number
-                // tracked in {@link inprogressLSSNs}
-                if ((inprogressLogSegment.getLogSegmentSequenceNumber() != logSegmentSeqNo)
-                        || (leastInprogressLSSN != logSegmentSeqNo)) {
+                // it should also be same as the least inprogress log segment sequence number tracked in {@link inprogressLSSNs}
+                if ((inprogressLogSegment.getLogSegmentSequenceNumber() != logSegmentSeqNo) ||
+                        (leastInprogressLSSN != logSegmentSeqNo)) {
                     FutureUtils.completeExceptionally(promise, new UnexpectedException(
                             "Didn't find matched inprogress log segments when completing inprogress "
                                     + inprogressLogSegment));
@@ -919,20 +894,18 @@ class BKLogWriteHandler extends BKLogHandler {
         }
 
         // store max sequence number.
-        long maxSeqNo = Math.max(logSegmentSeqNo, maxLogSegmentSequenceNo.getSequenceNumber());
-        if (maxLogSegmentSequenceNo.getSequenceNumber() == logSegmentSeqNo
-                || (maxLogSegmentSequenceNo.getSequenceNumber() == logSegmentSeqNo + 1)) {
+        long maxSeqNo= Math.max(logSegmentSeqNo, maxLogSegmentSequenceNo.getSequenceNumber());
+        if (maxLogSegmentSequenceNo.getSequenceNumber() == logSegmentSeqNo ||
+                (maxLogSegmentSequenceNo.getSequenceNumber() == logSegmentSeqNo + 1)) {
             // ignore the case that a new inprogress log segment is pre-allocated
             // before completing current inprogress one
             LOG.info("Try storing max sequence number {} in completing {}.",
                     new Object[] { logSegmentSeqNo, inprogressLogSegment.getZkPath() });
         } else {
             LOG.warn("Unexpected max ledger sequence number {} found while completing log segment {} for {}",
-                    new Object[] {
-                            maxLogSegmentSequenceNo.getSequenceNumber(), logSegmentSeqNo, getFullyQualifiedName() });
+                    new Object[] { maxLogSegmentSequenceNo.getSequenceNumber(), logSegmentSeqNo, getFullyQualifiedName() });
             if (validateLogSegmentSequenceNumber) {
-                FutureUtils.completeExceptionally(promise,
-                        new DLIllegalStateException("Unexpected max log segment sequence number "
+                FutureUtils.completeExceptionally(promise, new DLIllegalStateException("Unexpected max log segment sequence number "
                         + maxLogSegmentSequenceNo.getSequenceNumber() + " for " + getFullyQualifiedName()
                         + ", expected " + (logSegmentSeqNo - 1)));
                 return;
@@ -994,8 +967,7 @@ class BKLogWriteHandler extends BKLogHandler {
         } catch (IOException ioe) {
             return FutureUtils.exception(ioe);
         }
-        return getCachedLogSegmentsAfterFirstFetch(LogSegmentMetadata.COMPARATOR)
-                .thenCompose(recoverLogSegmentsFunction);
+        return getCachedLogSegmentsAfterFirstFetch(LogSegmentMetadata.COMPARATOR).thenCompose(recoverLogSegmentsFunction);
     }
 
     class RecoverLogSegmentFunction implements Function<LogSegmentMetadata, CompletableFuture<LogSegmentMetadata>> {
@@ -1063,8 +1035,8 @@ class BKLogWriteHandler extends BKLogHandler {
             logSegments -> setLogSegmentsOlderThanDLSNTruncated(logSegments, dlsn));
     }
 
-    private CompletableFuture<List<LogSegmentMetadata>> setLogSegmentsOlderThanDLSNTruncated(
-            List<LogSegmentMetadata> logSegments, final DLSN dlsn) {
+    private CompletableFuture<List<LogSegmentMetadata>> setLogSegmentsOlderThanDLSNTruncated(List<LogSegmentMetadata> logSegments,
+                                                                                  final DLSN dlsn) {
         LOG.debug("Setting truncation status on logs older than {} from {} for {}",
                 new Object[]{dlsn, logSegments, getFullyQualifiedName()});
         List<LogSegmentMetadata> truncateList = new ArrayList<LogSegmentMetadata>(logSegments.size());
@@ -1079,13 +1051,11 @@ class BKLogWriteHandler extends BKLogHandler {
                 } else if (l.getFirstDLSN().compareTo(dlsn) < 0) {
                     // Can be satisfied by at most one segment
                     if (null != partialTruncate) {
-                        String logMsg = String.format("Potential metadata inconsistency for stream %s at segment %s",
-                                getFullyQualifiedName(), l);
+                        String logMsg = String.format("Potential metadata inconsistency for stream %s at segment %s", getFullyQualifiedName(), l);
                         LOG.error(logMsg);
                         return FutureUtils.exception(new DLIllegalStateException(logMsg));
                     }
-                    LOG.info("{}: Partially truncating log segment {} older than {}.",
-                            new Object[] {getFullyQualifiedName(), l, dlsn});
+                    LOG.info("{}: Partially truncating log segment {} older than {}.", new Object[] {getFullyQualifiedName(), l, dlsn});
                     partialTruncate = l;
                 } else {
                     break;
@@ -1132,8 +1102,8 @@ class BKLogWriteHandler extends BKLogHandler {
                     LogSegmentMetadata l = logSegments.get(iterator);
                     // When application explicitly truncates segments; timestamp based purge is
                     // only used to cleanup log segments that have been marked for truncation
-                    if ((l.isTruncated() || !conf.getExplicitTruncationByApplication())
-                            && !l.isInProgress() && (l.getCompletionTime() < minTimestampToKeep)) {
+                    if ((l.isTruncated() || !conf.getExplicitTruncationByApplication()) &&
+                        !l.isInProgress() && (l.getCompletionTime() < minTimestampToKeep)) {
                         purgeList.add(l);
                     } else {
                         // stop truncating log segments if we find either an inprogress or a partially
@@ -1162,9 +1132,9 @@ class BKLogWriteHandler extends BKLogHandler {
                 List<LogSegmentMetadata> purgeList = Lists.newArrayListWithExpectedSize(numLogSegmentsToProcess);
                 for (int iterator = 0; iterator < numLogSegmentsToProcess; iterator++) {
                     LogSegmentMetadata l = logSegments.get(iterator);
-                    if ((minTxIdToKeep < 0)
-                            || ((l.isTruncated() || !conf.getExplicitTruncationByApplication())
-                            && !l.isInProgress() && (l.getLastTxId() < minTxIdToKeep))) {
+                    if ((minTxIdToKeep < 0) ||
+                        ((l.isTruncated() || !conf.getExplicitTruncationByApplication()) &&
+                        !l.isInProgress() && (l.getLastTxId() < minTxIdToKeep))) {
                         purgeList.add(l);
                     } else {
                         // stop truncating log segments if we find either an inprogress or a partially
@@ -1183,7 +1153,7 @@ class BKLogWriteHandler extends BKLogHandler {
         final List<LogSegmentMetadata> listToTruncate = Lists.newArrayListWithCapacity(truncateList.size() + 1);
         final List<LogSegmentMetadata> listAfterTruncated = Lists.newArrayListWithCapacity(truncateList.size() + 1);
         Transaction<Object> updateTxn = metadataUpdater.transaction();
-        for (LogSegmentMetadata l : truncateList) {
+        for(LogSegmentMetadata l : truncateList) {
             if (!l.isTruncated()) {
                 LogSegmentMetadata newSegment = metadataUpdater.setLogSegmentTruncated(updateTxn, l);
                 listToTruncate.add(l);
@@ -1191,9 +1161,8 @@ class BKLogWriteHandler extends BKLogHandler {
             }
         }
 
-        if (null != partialTruncate && (partialTruncate.isNonTruncated()
-                || (partialTruncate.isPartiallyTruncated()
-                && (partialTruncate.getMinActiveDLSN().compareTo(minActiveDLSN) < 0)))) {
+        if (null != partialTruncate && (partialTruncate.isNonTruncated() ||
+                (partialTruncate.isPartiallyTruncated() && (partialTruncate.getMinActiveDLSN().compareTo(minActiveDLSN) < 0)))) {
             LogSegmentMetadata newSegment = metadataUpdater.setLogSegmentPartiallyTruncated(
                     updateTxn, partialTruncate, minActiveDLSN);
             listToTruncate.add(partialTruncate);
@@ -1227,16 +1196,12 @@ class BKLogWriteHandler extends BKLogHandler {
         promise.whenComplete(new FutureEventListener<LogSegmentMetadata>() {
             @Override
             public void onSuccess(LogSegmentMetadata segment) {
-                deleteOpStats.registerSuccessfulEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS),
-                    TimeUnit.MICROSECONDS);
+                deleteOpStats.registerSuccessfulEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             }
 
             @Override
             public void onFailure(Throwable cause) {
-                deleteOpStats.registerFailedEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS),
-                    TimeUnit.MICROSECONDS);
+                deleteOpStats.registerFailedEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             }
         });
         entryStore.deleteLogSegment(ledgerMetadata)
@@ -1304,7 +1269,7 @@ class BKLogWriteHandler extends BKLogHandler {
     }
 
     /**
-     * Get the znode path for a finalize ledger.
+     * Get the znode path for a finalize ledger
      */
     String completedLedgerZNode(long firstTxId, long lastTxId, long logSegmentSeqNo) {
         return String.format("%s/%s", logMetadata.getLogSegmentsPath(),
@@ -1326,7 +1291,7 @@ class BKLogWriteHandler extends BKLogHandler {
     }
 
     /**
-     * Get the znode path for the inprogressZNode.
+     * Get the znode path for the inprogressZNode
      */
     String inprogressZNode(long logSegmentId, long firstTxId, long logSegmentSeqNo) {
         return logMetadata.getLogSegmentsPath() + "/" + inprogressZNodeName(logSegmentId, firstTxId, logSegmentSeqNo);

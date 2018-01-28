@@ -17,12 +17,7 @@
  */
 package org.apache.distributedlog;
 
-import static org.junit.Assert.*;
 import com.google.common.util.concurrent.RateLimiter;
-import java.io.IOException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.distributedlog.api.AsyncLogWriter;
 import org.apache.distributedlog.api.DistributedLogManager;
 import org.apache.distributedlog.api.LogReader;
@@ -30,10 +25,13 @@ import org.apache.distributedlog.exceptions.DLInterruptedException;
 import org.apache.distributedlog.util.Utils;
 import org.junit.Test;
 
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Test Cases for NonBlockingReadsMultiReader.
- */
+import static org.junit.Assert.*;
+
 public class TestNonBlockingReadsMultiReader extends TestDistributedLogBase {
 
         static class ReaderThread extends Thread {

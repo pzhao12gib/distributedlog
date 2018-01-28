@@ -17,21 +17,17 @@
  */
 package org.apache.distributedlog.api;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.List;
-import org.apache.bookkeeper.common.annotation.InterfaceAudience.Public;
-import org.apache.bookkeeper.common.annotation.InterfaceStability.Evolving;
 import org.apache.distributedlog.LogRecord;
 import org.apache.distributedlog.io.Abortable;
 
+import java.io.Closeable;
+import java.io.IOException;
+import java.util.List;
 
-/**
- * A generic interface class to support writing log records into
- * a persistent distributed log.
- */
-@Public
-@Evolving
+/*
+* A generic interface class to support writing log records into
+* a persistent distributed log.
+*/
 public interface LogWriter extends Closeable, Abortable {
     /**
      * Write a log record to the stream.
@@ -39,7 +35,7 @@ public interface LogWriter extends Closeable, Abortable {
      * @param record single log record
      * @throws IOException
      */
-    void write(LogRecord record) throws IOException;
+    public void write(LogRecord record) throws IOException;
 
 
     /**
@@ -49,22 +45,26 @@ public interface LogWriter extends Closeable, Abortable {
      * @throws IOException
      */
     @Deprecated
-    int writeBulk(List<LogRecord> records) throws IOException;
+    public int writeBulk(List<LogRecord> records) throws IOException;
 
     /**
      * All data that has been written to the stream so far will be sent to
      * persistent storage.
      * The transmission is asynchronous and new data can be still written to the
      * stream while flushing is performed.
+     *
+     * TODO: rename this to flush()
      */
-    long flush() throws IOException;
+    public long setReadyToFlush() throws IOException;
 
     /**
      * Flush and sync all data that is ready to be flush
-     * {@link #flush()} into underlying persistent store.
+     * {@link #setReadyToFlush()} into underlying persistent store.
      * @throws IOException
+     *
+     * TODO: rename this to commit()
      */
-    long commit() throws IOException;
+    public long flushAndSync() throws IOException;
 
     /**
      * Flushes all the data up to this point,
@@ -74,6 +74,6 @@ public interface LogWriter extends Closeable, Abortable {
      *
      * @throws IOException
      */
-    void markEndOfStream() throws IOException;
+    public void markEndOfStream() throws IOException;
 
 }

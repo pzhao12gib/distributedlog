@@ -17,77 +17,67 @@
  */
 package org.apache.distributedlog.impl;
 
-import static org.apache.distributedlog.util.DLUtils.isReservedStreamName;
-import static org.apache.distributedlog.util.DLUtils.validateAndNormalizeName;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.epoll.EpollEventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
-import io.netty.util.HashedWheelTimer;
+import org.apache.distributedlog.BookKeeperClient;
+import org.apache.distributedlog.BookKeeperClientBuilder;
+import org.apache.distributedlog.DistributedLogConfiguration;
+import org.apache.distributedlog.DistributedLogConstants;
+import org.apache.distributedlog.api.MetadataAccessor;
+import org.apache.distributedlog.ZooKeeperClient;
+import org.apache.distributedlog.ZooKeeperClientBuilder;
+import org.apache.distributedlog.acl.AccessControlManager;
+import org.apache.distributedlog.acl.DefaultAccessControlManager;
+import org.apache.distributedlog.impl.acl.ZKAccessControlManager;
+import org.apache.distributedlog.bk.LedgerAllocator;
+import org.apache.distributedlog.bk.LedgerAllocatorUtils;
+import org.apache.distributedlog.config.DynamicDistributedLogConfiguration;
+import org.apache.distributedlog.exceptions.AlreadyClosedException;
+import org.apache.distributedlog.exceptions.InvalidStreamNameException;
+import org.apache.distributedlog.impl.federated.FederatedZKLogMetadataStore;
+import org.apache.distributedlog.impl.logsegment.BKLogSegmentEntryStore;
+import org.apache.distributedlog.impl.metadata.ZKLogStreamMetadataStore;
+import org.apache.distributedlog.impl.subscription.ZKSubscriptionsStore;
+import org.apache.distributedlog.injector.AsyncFailureInjector;
+import org.apache.distributedlog.logsegment.LogSegmentEntryStore;
+import org.apache.distributedlog.impl.metadata.BKDLConfig;
+import org.apache.distributedlog.metadata.LogMetadataForReader;
+import org.apache.distributedlog.metadata.LogMetadataStore;
+import org.apache.distributedlog.metadata.LogStreamMetadataStore;
+import org.apache.distributedlog.namespace.NamespaceDriver;
+import org.apache.distributedlog.namespace.NamespaceDriverManager;
+import org.apache.distributedlog.api.subscription.SubscriptionsStore;
+import org.apache.distributedlog.util.OrderedScheduler;
+import org.apache.distributedlog.util.Utils;
+import org.apache.bookkeeper.feature.FeatureProvider;
+import org.apache.bookkeeper.stats.StatsLogger;
+import org.apache.bookkeeper.zookeeper.BoundExponentialBackoffRetryPolicy;
+import org.apache.bookkeeper.zookeeper.RetryPolicy;
+import org.apache.zookeeper.KeeperException;
+import org.apache.zookeeper.ZooKeeper;
+import org.apache.zookeeper.common.PathUtils;
+import org.apache.zookeeper.data.Stat;
+import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
+import org.jboss.netty.channel.socket.nio.NioClientSocketChannelFactory;
+import org.jboss.netty.util.HashedWheelTimer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import org.apache.bookkeeper.feature.FeatureProvider;
-import org.apache.bookkeeper.stats.StatsLogger;
-import org.apache.bookkeeper.zookeeper.BoundExponentialBackoffRetryPolicy;
-import org.apache.bookkeeper.zookeeper.RetryPolicy;
-import org.apache.commons.lang.SystemUtils;
 
-import org.apache.distributedlog.BookKeeperClient;
-import org.apache.distributedlog.BookKeeperClientBuilder;
-import org.apache.distributedlog.DistributedLogConfiguration;
-import org.apache.distributedlog.DistributedLogConstants;
-import org.apache.distributedlog.ZooKeeperClient;
-import org.apache.distributedlog.ZooKeeperClientBuilder;
-
-import org.apache.distributedlog.acl.AccessControlManager;
-import org.apache.distributedlog.acl.DefaultAccessControlManager;
-import org.apache.distributedlog.api.MetadataAccessor;
-import org.apache.distributedlog.api.subscription.SubscriptionsStore;
-import org.apache.distributedlog.bk.LedgerAllocator;
-import org.apache.distributedlog.bk.LedgerAllocatorUtils;
-
-
-import org.apache.distributedlog.config.DynamicDistributedLogConfiguration;
-import org.apache.distributedlog.exceptions.AlreadyClosedException;
-import org.apache.distributedlog.exceptions.InvalidStreamNameException;
-import org.apache.distributedlog.impl.acl.ZKAccessControlManager;
-import org.apache.distributedlog.impl.federated.FederatedZKLogMetadataStore;
-import org.apache.distributedlog.impl.logsegment.BKLogSegmentEntryStore;
-import org.apache.distributedlog.impl.metadata.BKDLConfig;
-import org.apache.distributedlog.impl.metadata.ZKLogStreamMetadataStore;
-import org.apache.distributedlog.impl.subscription.ZKSubscriptionsStore;
-import org.apache.distributedlog.injector.AsyncFailureInjector;
-import org.apache.distributedlog.logsegment.LogSegmentEntryStore;
-import org.apache.distributedlog.metadata.LogMetadataForReader;
-import org.apache.distributedlog.metadata.LogMetadataStore;
-import org.apache.distributedlog.metadata.LogStreamMetadataStore;
-import org.apache.distributedlog.namespace.NamespaceDriver;
-import org.apache.distributedlog.namespace.NamespaceDriverManager;
-import org.apache.distributedlog.util.OrderedScheduler;
-import org.apache.distributedlog.util.Utils;
-
-import org.apache.zookeeper.KeeperException;
-import org.apache.zookeeper.ZooKeeper;
-import org.apache.zookeeper.common.PathUtils;
-import org.apache.zookeeper.data.Stat;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-
-
+import static org.apache.distributedlog.util.DLUtils.isReservedStreamName;
+import static org.apache.distributedlog.util.DLUtils.validateAndNormalizeName;
 
 /**
- * Manager for ZooKeeper/BookKeeper based namespace.
+ * Manager for ZooKeeper/BookKeeper based namespace
  */
 public class BKNamespaceDriver implements NamespaceDriver {
 
@@ -140,7 +130,7 @@ public class BKNamespaceDriver implements NamespaceDriver {
     //       {@link org.apache.distributedlog.BookKeeperClient#get()}. So it is safe to
     //       keep builders and their client wrappers here, as they will be used when
     //       instantiating readers or writers.
-    private EventLoopGroup eventLoopGroup;
+    private ClientSocketChannelFactory channelFactory;
     private HashedWheelTimer requestTimer;
     private BookKeeperClientBuilder sharedWriterBKCBuilder;
     private BookKeeperClient writerBKC;
@@ -260,22 +250,11 @@ public class BKNamespaceDriver implements NamespaceDriver {
         return bkdlConfig;
     }
 
-    static EventLoopGroup getDefaultEventLoopGroup(int numThreads) {
-        ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("DL-io-%s").build();
-        if (SystemUtils.IS_OS_LINUX) {
-            try {
-                return new EpollEventLoopGroup(numThreads, threadFactory);
-            } catch (Throwable t) {
-                LOG.warn("Could not use Netty Epoll event loop for bookie server:", t);
-                return new NioEventLoopGroup(numThreads, threadFactory);
-            }
-        } else {
-            return new NioEventLoopGroup(numThreads, threadFactory);
-        }
-    }
-
     private void initializeBookKeeperClients() throws IOException {
-        this.eventLoopGroup = getDefaultEventLoopGroup(conf.getBKClientNumberIOThreads());
+        this.channelFactory = new NioClientSocketChannelFactory(
+                Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("DL-netty-boss-%d").build()),
+                Executors.newCachedThreadPool(new ThreadFactoryBuilder().setNameFormat("DL-netty-worker-%d").build()),
+                conf.getBKClientNumberIOThreads());
         this.requestTimer = new HashedWheelTimer(
                 new ThreadFactoryBuilder().setNameFormat("DLFactoryTimer-%d").build(),
                 conf.getTimeoutTimerTickDurationMs(), TimeUnit.MILLISECONDS,
@@ -286,7 +265,7 @@ public class BKNamespaceDriver implements NamespaceDriver {
                 conf,
                 bkdlConfig.getBkZkServersForWriter(),
                 bkdlConfig.getBkLedgersPath(),
-                eventLoopGroup,
+                channelFactory,
                 requestTimer,
                 Optional.of(featureProvider.scope("bkc")),
                 statsLogger);
@@ -301,7 +280,7 @@ public class BKNamespaceDriver implements NamespaceDriver {
                     conf,
                     bkdlConfig.getBkZkServersForReader(),
                     bkdlConfig.getBkLedgersPath(),
-                    eventLoopGroup,
+                    channelFactory,
                     requestTimer,
                     Optional.<FeatureProvider>absent(),
                     statsLogger);
@@ -335,12 +314,11 @@ public class BKNamespaceDriver implements NamespaceDriver {
     }
 
     @VisibleForTesting
-    public static String
-    validateAndGetFullLedgerAllocatorPoolPath(DistributedLogConfiguration conf, URI uri) throws IOException {
+    public static String validateAndGetFullLedgerAllocatorPoolPath(DistributedLogConfiguration conf, URI uri) throws IOException {
         String poolPath = conf.getLedgerAllocatorPoolPath();
         LOG.info("PoolPath is {}", poolPath);
         if (null == poolPath || !poolPath.startsWith(".") || poolPath.endsWith("/")) {
-            LOG.error("Invalid ledger allocator pool path specified when enabling ledger allocator pool: {}", poolPath);
+            LOG.error("Invalid ledger allocator pool path specified when enabling ledger allocator pool : {}", poolPath);
             throw new IOException("Invalid ledger allocator pool path specified : " + poolPath);
         }
         String poolName = conf.getLedgerAllocatorPoolName();
@@ -352,7 +330,7 @@ public class BKNamespaceDriver implements NamespaceDriver {
         try {
             PathUtils.validatePath(rootPath);
         } catch (IllegalArgumentException iae) {
-            LOG.error("Invalid ledger allocator pool path specified when enabling ledger allocator pool: {}", poolPath);
+            LOG.error("Invalid ledger allocator pool path specified when enabling ledger allocator pool : {}", poolPath);
             throw new IOException("Invalid ledger allocator pool path specified : " + poolPath);
         }
         return rootPath;
@@ -372,8 +350,7 @@ public class BKNamespaceDriver implements NamespaceDriver {
             if (null != allocator) {
                 allocator.start();
             }
-            LOG.info("Created ledger allocator pool under {} with size {}.",
-                    allocatorPoolPath, conf.getLedgerAllocatorPoolCoreSize());
+            LOG.info("Created ledger allocator pool under {} with size {}.", allocatorPoolPath, conf.getLedgerAllocatorPoolCoreSize());
         } else {
             allocator = null;
         }
@@ -416,7 +393,7 @@ public class BKNamespaceDriver implements NamespaceDriver {
         writerZKC.close();
         readerZKC.close();
         // release bookkeeper resources
-        eventLoopGroup.shutdownGracefully();
+        channelFactory.releaseExternalResources();
         LOG.info("Release external resources used by channel factory.");
         requestTimer.stop();
         LOG.info("Stopped request timer");
@@ -549,7 +526,7 @@ public class BKNamespaceDriver implements NamespaceDriver {
                 return result;
             }
             List<String> children = zk.getChildren(namespaceRootPath, false);
-            for (String child: children) {
+            for(String child: children) {
                 if (isReservedStreamName(child)) {
                     continue;
                 }
@@ -594,10 +571,10 @@ public class BKNamespaceDriver implements NamespaceDriver {
             .retryPolicy(retryPolicy)
             .statsLogger(statsLogger)
             .zkAclId(conf.getZkAclId());
-        LOG.info("Created shared zooKeeper client builder {}: zkServers = {}, numRetries = {}, sessionTimeout = {},"
-                + " retryBackoff = {}, maxRetryBackoff = {}, zkAclId = {}.", new Object[] {
-                zkcName, zkServers, conf.getZKNumRetries(), conf.getZKSessionTimeoutMilliseconds(),
-                conf.getZKRetryBackoffStartMillis(), conf.getZKRetryBackoffMaxMillis(), conf.getZkAclId() });
+        LOG.info("Created shared zooKeeper client builder {}: zkServers = {}, numRetries = {}, sessionTimeout = {}, retryBackoff = {},"
+                + " maxRetryBackoff = {}, zkAclId = {}.", new Object[] { zkcName, zkServers, conf.getZKNumRetries(),
+                conf.getZKSessionTimeoutMilliseconds(), conf.getZKRetryBackoffStartMillis(),
+                conf.getZKRetryBackoffMaxMillis(), conf.getZkAclId() });
         return builder;
     }
 
@@ -605,7 +582,7 @@ public class BKNamespaceDriver implements NamespaceDriver {
                                                      DistributedLogConfiguration conf,
                                                      String zkServers,
                                                      String ledgersPath,
-                                                     EventLoopGroup eventLoopGroup,
+                                                     ClientSocketChannelFactory channelFactory,
                                                      HashedWheelTimer requestTimer,
                                                      Optional<FeatureProvider> featureProviderOptional,
                                                      StatsLogger statsLogger) {
@@ -614,7 +591,7 @@ public class BKNamespaceDriver implements NamespaceDriver {
                 .dlConfig(conf)
                 .zkServers(zkServers)
                 .ledgersPath(ledgersPath)
-                .eventLoopGroup(eventLoopGroup)
+                .channelFactory(channelFactory)
                 .requestTimer(requestTimer)
                 .featureProvider(featureProviderOptional)
                 .statsLogger(statsLogger);

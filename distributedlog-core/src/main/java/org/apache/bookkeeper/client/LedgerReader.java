@@ -17,34 +17,35 @@
  */
 package org.apache.bookkeeper.client;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
+import org.apache.bookkeeper.net.BookieSocketAddress;
+import org.apache.bookkeeper.proto.BookieClient;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
+import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
+import org.apache.bookkeeper.proto.BookkeeperProtocol;
+import org.jboss.netty.buffer.ChannelBuffer;
+import org.jboss.netty.buffer.ChannelBufferInputStream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.bookkeeper.client.BKException.BKNoSuchEntryException;
-import org.apache.bookkeeper.client.BKException.Code;
-import org.apache.bookkeeper.client.DistributionSchedule.WriteSet;
-import org.apache.bookkeeper.client.api.LedgerEntries;
-import org.apache.bookkeeper.client.impl.LedgerEntryImpl;
-import org.apache.bookkeeper.common.concurrent.FutureEventListener;
-import org.apache.bookkeeper.net.BookieSocketAddress;
-import org.apache.bookkeeper.proto.BookieClient;
-import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.GenericCallback;
-import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks.ReadEntryCallback;
 
 /**
- * Reader used for DL tools to read entries.
+ * Reader used for DL tools to read entries
+ *
+ * TODO: move this to bookkeeper project?
  */
 public class LedgerReader {
 
-    /**
-     * Read Result Holder.
-     */
+    static final Logger logger = LoggerFactory.getLogger(LedgerReader.class);
+
     public static class ReadResult<T> {
         final long entryId;
         final int rc;
@@ -81,34 +82,28 @@ public class LedgerReader {
         bookieClient = bkc.getBookieClient();
     }
 
-    public static SortedMap<Long, ArrayList<BookieSocketAddress>> bookiesForLedger(final LedgerHandle lh) {
+    static public SortedMap<Long, ArrayList<BookieSocketAddress>> bookiesForLedger(final LedgerHandle lh) {
         return lh.getLedgerMetadata().getEnsembles();
     }
 
     public void readEntriesFromAllBookies(final LedgerHandle lh, long eid,
-                                          final GenericCallback<Set<ReadResult<ByteBuf>>> callback) {
-        WriteSet writeSet = lh.distributionSchedule.getWriteSet(eid);
+                                          final GenericCallback<Set<ReadResult<InputStream>>> callback) {
+        List<Integer> writeSet = lh.distributionSchedule.getWriteSet(eid);
         final AtomicInteger numBookies = new AtomicInteger(writeSet.size());
-        final Set<ReadResult<ByteBuf>> readResults = new HashSet<>();
+        final Set<ReadResult<InputStream>> readResults = new HashSet<ReadResult<InputStream>>();
         ReadEntryCallback readEntryCallback = new ReadEntryCallback() {
             @Override
-            public void readEntryComplete(int rc, long lid, long eid, ByteBuf buffer, Object ctx) {
+            public void readEntryComplete(int rc, long lid, long eid, ChannelBuffer buffer, Object ctx) {
                 BookieSocketAddress bookieAddress = (BookieSocketAddress) ctx;
-                ReadResult<ByteBuf> rr;
+                ReadResult<InputStream> rr;
                 if (BKException.Code.OK != rc) {
-                    rr = new ReadResult<>(eid, rc, null, bookieAddress.getSocketAddress());
+                    rr = new ReadResult<InputStream>(eid, rc, null, bookieAddress.getSocketAddress());
                 } else {
-                    ByteBuf content;
                     try {
-                        content = lh.macManager.verifyDigestAndReturnData(eid, buffer);
-                        ByteBuf toRet = Unpooled.copiedBuffer(content);
-                        rr = new ReadResult<>(eid, BKException.Code.OK, toRet, bookieAddress.getSocketAddress());
+                        ChannelBufferInputStream is = lh.macManager.verifyDigestAndReturnData(eid, buffer);
+                        rr = new ReadResult<InputStream>(eid, BKException.Code.OK, is, bookieAddress.getSocketAddress());
                     } catch (BKException.BKDigestMatchException e) {
-                        rr = new ReadResult<>(
-                            eid, BKException.Code.DigestMatchException, null, bookieAddress.getSocketAddress());
-
-                    } finally {
-                        buffer.release();
+                        rr = new ReadResult<InputStream>(eid, BKException.Code.DigestMatchException, null, bookieAddress.getSocketAddress());
                     }
                 }
                 readResults.add(rr);
@@ -119,8 +114,7 @@ public class LedgerReader {
         };
 
         ArrayList<BookieSocketAddress> ensemble = lh.getLedgerMetadata().getEnsemble(eid);
-        for (int i = 0; i < writeSet.size(); i++) {
-            int idx = writeSet.get(i);
+        for (Integer idx : writeSet) {
             bookieClient.readEntry(ensemble.get(idx), lh.getId(), eid, readEntryCallback, ensemble.get(idx));
         }
     }
@@ -137,62 +131,47 @@ public class LedgerReader {
                                                     final GenericCallback<List<LedgerEntry>> callback) {
         final List<LedgerEntry> resultList = new ArrayList<LedgerEntry>();
 
-        final FutureEventListener<LedgerEntries> readListener = new FutureEventListener<LedgerEntries>() {
-
-            private void readNext(long entryId) {
-                PendingReadOp op = new PendingReadOp(lh, lh.bk.scheduler, entryId, entryId, false);
-                op.future().whenComplete(this);
-                op.submit();
-            }
-
+        final AsyncCallback.ReadCallback readCallback = new AsyncCallback.ReadCallback() {
             @Override
-            public void onSuccess(LedgerEntries ledgerEntries) {
-                long entryId = -1L;
-                for (org.apache.bookkeeper.client.api.LedgerEntry entry : ledgerEntries) {
-                    resultList.add(new LedgerEntry((LedgerEntryImpl) entry));
-                    entryId = entry.getEntryId();
-                }
-                try {
-                    ledgerEntries.close();
-                } catch (Exception e) {
-                    // bk should not throw any exceptions here
-                }
-                ++entryId;
-                readNext(entryId);
-            }
-
-            @Override
-            public void onFailure(Throwable throwable) {
-                if (throwable instanceof BKNoSuchEntryException) {
-                    callback.operationComplete(Code.OK, resultList);
-                } else {
-                    int retCode;
-                    if (throwable instanceof BKException) {
-                        retCode = ((BKException) throwable).getCode();
-                    } else {
-                        retCode = Code.UnexpectedConditionException;
+            public void readComplete(int rc, LedgerHandle lh, Enumeration<LedgerEntry> entries, Object ctx) {
+                if (BKException.Code.NoSuchEntryException == rc) {
+                    callback.operationComplete(BKException.Code.OK, resultList);
+                } else if (BKException.Code.OK == rc) {
+                    while (entries.hasMoreElements()) {
+                        resultList.add(entries.nextElement());
                     }
-                    callback.operationComplete(retCode, resultList);
+                    long entryId = (Long) ctx;
+                    ++entryId;
+                    PendingReadOp readOp = new PendingReadOp(lh, lh.bk.scheduler, entryId, entryId, this, entryId);
+                    readOp.initiate();
+                } else {
+                    callback.operationComplete(rc, resultList);
                 }
             }
         };
 
-        ReadLastConfirmedOp.LastConfirmedDataCallback readLACCallback = (rc, recoveryData) -> {
-            if (BKException.Code.OK != rc) {
-                callback.operationComplete(rc, resultList);
-                return;
+        ReadLastConfirmedOp.LastConfirmedDataCallback readLACCallback = new ReadLastConfirmedOp.LastConfirmedDataCallback() {
+            @Override
+            public void readLastConfirmedDataComplete(int rc, DigestManager.RecoveryData recoveryData) {
+                if (BKException.Code.OK != rc) {
+                    callback.operationComplete(rc, resultList);
+                    return;
+                }
+
+                if (LedgerHandle.INVALID_ENTRY_ID >= recoveryData.lastAddConfirmed) {
+                    callback.operationComplete(BKException.Code.OK, resultList);
+                    return;
+                }
+
+                long entryId = recoveryData.lastAddConfirmed;
+                PendingReadOp readOp = new PendingReadOp(lh, lh.bk.scheduler, entryId, entryId, readCallback, entryId);
+                try {
+                    readOp.initiate();
+                } catch (Throwable t) {
+                    logger.error("Failed to initialize pending read entry {} for ledger {} : ",
+                                 new Object[] { entryId, lh.getLedgerMetadata(), t });
+                }
             }
-
-
-            if (LedgerHandle.INVALID_ENTRY_ID >= recoveryData.lastAddConfirmed) {
-                callback.operationComplete(BKException.Code.OK, resultList);
-                return;
-            }
-
-            long entryId = recoveryData.lastAddConfirmed;
-            PendingReadOp op = new PendingReadOp(lh, lh.bk.scheduler, entryId, entryId, false);
-            op.future().whenComplete(readListener);
-            op.submit();
         };
         // Read Last AddConfirmed
         new ReadLastConfirmedOp(lh, readLACCallback).initiate();
@@ -200,31 +179,33 @@ public class LedgerReader {
 
     public void readLacs(final LedgerHandle lh, long eid,
                          final GenericCallback<Set<ReadResult<Long>>> callback) {
-        WriteSet writeSet = lh.distributionSchedule.getWriteSet(eid);
+        List<Integer> writeSet = lh.distributionSchedule.getWriteSet(eid);
         final AtomicInteger numBookies = new AtomicInteger(writeSet.size());
         final Set<ReadResult<Long>> readResults = new HashSet<ReadResult<Long>>();
-        ReadEntryCallback readEntryCallback = (rc, lid, eid1, buffer, ctx) -> {
-            InetSocketAddress bookieAddress = (InetSocketAddress) ctx;
-            ReadResult<Long> rr;
-            if (BKException.Code.OK != rc) {
-                rr = new ReadResult<Long>(eid1, rc, null, bookieAddress);
-            } else {
-                try {
-                    DigestManager.RecoveryData data = lh.macManager.verifyDigestAndReturnLastConfirmed(buffer);
-                    rr = new ReadResult<Long>(eid1, BKException.Code.OK, data.lastAddConfirmed, bookieAddress);
-                } catch (BKException.BKDigestMatchException e) {
-                    rr = new ReadResult<Long>(eid1, BKException.Code.DigestMatchException, null, bookieAddress);
+        ReadEntryCallback readEntryCallback = new ReadEntryCallback() {
+            @Override
+            public void readEntryComplete(int rc, long lid, long eid, ChannelBuffer buffer, Object ctx) {
+                InetSocketAddress bookieAddress = (InetSocketAddress) ctx;
+                ReadResult<Long> rr;
+                if (BKException.Code.OK != rc) {
+                    rr = new ReadResult<Long>(eid, rc, null, bookieAddress);
+                } else {
+                    try {
+                        DigestManager.RecoveryData data = lh.macManager.verifyDigestAndReturnLastConfirmed(buffer);
+                        rr = new ReadResult<Long>(eid, BKException.Code.OK, data.lastAddConfirmed, bookieAddress);
+                    } catch (BKException.BKDigestMatchException e) {
+                        rr = new ReadResult<Long>(eid, BKException.Code.DigestMatchException, null, bookieAddress);
+                    }
                 }
-            }
-            readResults.add(rr);
-            if (numBookies.decrementAndGet() == 0) {
-                callback.operationComplete(BKException.Code.OK, readResults);
+                readResults.add(rr);
+                if (numBookies.decrementAndGet() == 0) {
+                    callback.operationComplete(BKException.Code.OK, readResults);
+                }
             }
         };
 
         ArrayList<BookieSocketAddress> ensemble = lh.getLedgerMetadata().getEnsemble(eid);
-        for (int i = 0; i < writeSet.size(); i++) {
-            int idx = writeSet.get(i);
+        for (Integer idx : writeSet) {
             bookieClient.readEntry(ensemble.get(idx), lh.getId(), eid, readEntryCallback, ensemble.get(idx));
         }
     }

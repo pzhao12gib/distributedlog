@@ -17,39 +17,38 @@
  */
 package org.apache.distributedlog;
 
-import static org.apache.distributedlog.namespace.NamespaceDriver.Role.WRITER;
-import static org.apache.distributedlog.util.DLUtils.validateAndNormalizeName;
-
+import com.google.common.base.Optional;
 import com.google.common.base.Ticker;
-import java.io.IOException;
-import java.net.URI;
-import java.util.Iterator;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import org.apache.bookkeeper.feature.FeatureProvider;
-import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.distributedlog.acl.AccessControlManager;
 import org.apache.distributedlog.api.DistributedLogManager;
 import org.apache.distributedlog.api.namespace.Namespace;
 import org.apache.distributedlog.callback.NamespaceListener;
-import org.apache.distributedlog.common.concurrent.FutureUtils;
-import org.apache.distributedlog.common.util.PermitLimiter;
-import org.apache.distributedlog.common.util.SchedulerUtils;
 import org.apache.distributedlog.config.DynamicDistributedLogConfiguration;
 import org.apache.distributedlog.exceptions.AlreadyClosedException;
 import org.apache.distributedlog.exceptions.InvalidStreamNameException;
 import org.apache.distributedlog.exceptions.LogNotFoundException;
 import org.apache.distributedlog.injector.AsyncFailureInjector;
+import org.apache.distributedlog.io.AsyncCloseable;
 import org.apache.distributedlog.logsegment.LogSegmentMetadataCache;
 import org.apache.distributedlog.namespace.NamespaceDriver;
 import org.apache.distributedlog.util.ConfUtils;
 import org.apache.distributedlog.util.OrderedScheduler;
+import org.apache.distributedlog.common.util.PermitLimiter;
+import org.apache.distributedlog.common.util.SchedulerUtils;
 import org.apache.distributedlog.util.Utils;
-
+import org.apache.bookkeeper.feature.FeatureProvider;
+import org.apache.bookkeeper.stats.StatsLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.net.URI;
+import java.util.Iterator;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static org.apache.distributedlog.namespace.NamespaceDriver.Role.WRITER;
+import static org.apache.distributedlog.util.DLUtils.validateAndNormalizeName;
 
 /**
  * BKDistributedLogNamespace is the default implementation of {@link Namespace}. It uses
@@ -79,6 +78,7 @@ import org.slf4j.LoggerFactory;
  * </ul>
  *
  * <h4>DistributedLogManager</h4>
+ *
  * All the core stats about reader and writer are exposed under current scope via {@link BKDistributedLogManager}.
  */
 public class BKDistributedLogNamespace implements Namespace {
@@ -155,15 +155,15 @@ public class BKDistributedLogNamespace implements Namespace {
             throws InvalidStreamNameException, LogNotFoundException, IOException {
         checkState();
         logName = validateAndNormalizeName(logName);
-        com.google.common.base.Optional<URI> uri = Utils.ioResult(driver.getLogMetadataStore().getLogLocation(logName));
+        Optional<URI> uri = Utils.ioResult(driver.getLogMetadataStore().getLogLocation(logName));
         if (!uri.isPresent()) {
             throw new LogNotFoundException("Log " + logName + " isn't found.");
         }
         DistributedLogManager dlm = openLogInternal(
                 uri.get(),
                 logName,
-                Optional.empty(),
-                Optional.empty());
+                Optional.<DistributedLogConfiguration>absent(),
+                Optional.<DynamicDistributedLogConfiguration>absent());
         dlm.delete();
     }
 
@@ -171,9 +171,9 @@ public class BKDistributedLogNamespace implements Namespace {
     public DistributedLogManager openLog(String logName)
             throws InvalidStreamNameException, IOException {
         return openLog(logName,
-                Optional.empty(),
-                Optional.empty(),
-                Optional.empty());
+                Optional.<DistributedLogConfiguration>absent(),
+                Optional.<DynamicDistributedLogConfiguration>absent(),
+                Optional.<StatsLogger>absent());
     }
 
     @Override
@@ -184,7 +184,7 @@ public class BKDistributedLogNamespace implements Namespace {
             throws InvalidStreamNameException, IOException {
         checkState();
         logName = validateAndNormalizeName(logName);
-        com.google.common.base.Optional<URI> uri = Utils.ioResult(driver.getLogMetadataStore().getLogLocation(logName));
+        Optional<URI> uri = Utils.ioResult(driver.getLogMetadataStore().getLogLocation(logName));
         if (!uri.isPresent()) {
             throw new LogNotFoundException("Log " + logName + " isn't found.");
         }
@@ -196,32 +196,10 @@ public class BKDistributedLogNamespace implements Namespace {
     }
 
     @Override
-    public CompletableFuture<Void> renameLog(String oldName, String newName) {
-        try {
-            checkState();
-            final String oldLogName = validateAndNormalizeName(oldName);
-            final String newLogName = validateAndNormalizeName(newName);
-
-            return driver.getLogMetadataStore().getLogLocation(oldName)
-                .thenCompose(uriOptional -> {
-                    if (uriOptional.isPresent()) {
-                        return driver.getLogStreamMetadataStore(WRITER)
-                            .renameLog(uriOptional.get(), oldLogName, newLogName);
-                    } else {
-                        return FutureUtils.exception(
-                            new LogNotFoundException("Log " + oldLogName + " isn't found."));
-                    }
-                });
-        } catch (IOException ioe) {
-            return FutureUtils.exception(ioe);
-        }
-    }
-
-    @Override
     public boolean logExists(String logName)
         throws IOException, IllegalArgumentException {
         checkState();
-        com.google.common.base.Optional<URI> uri = Utils.ioResult(driver.getLogMetadataStore().getLogLocation(logName));
+        Optional<URI> uri = Utils.ioResult(driver.getLogMetadataStore().getLogLocation(logName));
         if (uri.isPresent()) {
             try {
                 Utils.ioResult(driver.getLogStreamMetadataStore(WRITER)
@@ -238,14 +216,7 @@ public class BKDistributedLogNamespace implements Namespace {
     @Override
     public Iterator<String> getLogs() throws IOException {
         checkState();
-        return Utils.ioResult(driver.getLogMetadataStore().getLogs(""));
-    }
-
-    @Override
-    public Iterator<String> getLogs(String logNamePrefix) throws IOException {
-        checkState();
-        logNamePrefix = validateAndNormalizeName(logNamePrefix);
-        return Utils.ioResult(driver.getLogMetadataStore().getLogs(logNamePrefix));
+        return Utils.ioResult(driver.getLogMetadataStore().getLogs());
     }
 
     @Override
@@ -310,8 +281,7 @@ public class BKDistributedLogNamespace implements Namespace {
                 failureInjector,                    /* Failure Injector */
                 statsLogger,                        /* Stats Logger */
                 perLogStatsLogger,                  /* Per Log Stats Logger */
-                com.google.common.base.Optional.absent()
-                                                    /* shared resources, we don't need to close any resources in dlm */
+                Optional.<AsyncCloseable>absent()   /* shared resources, we don't need to close any resources in dlm */
         );
     }
 
@@ -329,17 +299,16 @@ public class BKDistributedLogNamespace implements Namespace {
 
     /**
      * Close the distributed log manager factory, freeing any resources it may hold.
-     * close the resource in reverse order v.s. in which they are started
      */
     @Override
     public void close() {
         if (!closed.compareAndSet(false, true)) {
             return;
         }
-        // close the write limiter
-        this.writeLimiter.close();
         // shutdown the driver
         Utils.close(driver);
+        // close the write limiter
+        this.writeLimiter.close();
         // Shutdown the schedulers
         SchedulerUtils.shutdownScheduler(scheduler, conf.getSchedulerShutdownTimeoutMs(),
                 TimeUnit.MILLISECONDS);

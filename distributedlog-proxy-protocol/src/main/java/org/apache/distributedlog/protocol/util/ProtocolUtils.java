@@ -19,10 +19,8 @@ package org.apache.distributedlog.protocol.util;
 
 import static com.google.common.base.Charsets.UTF_8;
 
-import io.netty.buffer.ByteBuf;
-import java.nio.ByteBuffer;
-import java.util.zip.CRC32;
 import org.apache.distributedlog.DLSN;
+import java.util.zip.CRC32;
 import org.apache.distributedlog.exceptions.DLException;
 import org.apache.distributedlog.exceptions.OwnershipAcquireFailedException;
 import org.apache.distributedlog.thrift.service.ResponseHeader;
@@ -44,25 +42,11 @@ public class ProtocolUtils {
     /**
      * Generate crc32 for WriteOp.
      */
-    public static Long writeOpCRC32(String stream, ByteBuf data) {
+    public static Long writeOpCRC32(String stream, byte[] payload) {
         CRC32 crc = requestCRC.get();
         try {
             crc.update(stream.getBytes(UTF_8));
-            crc.update(data.nioBuffer());
-            return crc.getValue();
-        } finally {
-            crc.reset();
-        }
-    }
-
-    /**
-     * Generate crc32 for WriteOp.
-     */
-    public static Long writeOpCRC32(String stream, ByteBuffer data) {
-        CRC32 crc = requestCRC.get();
-        try {
-            crc.update(stream.getBytes(UTF_8));
-            crc.update(data);
+            crc.update(payload);
             return crc.getValue();
         } finally {
             crc.reset();

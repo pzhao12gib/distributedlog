@@ -17,12 +17,8 @@
  */
 package org.apache.distributedlog.impl;
 
-import static org.junit.Assert.*;
-
 import com.google.common.base.Optional;
 import com.google.common.collect.Sets;
-import java.net.URI;
-import java.util.Set;
 import org.apache.distributedlog.DistributedLogConfiguration;
 import org.apache.distributedlog.TestDistributedLogBase;
 import org.apache.distributedlog.TestZooKeeperClientBuilder;
@@ -37,12 +33,17 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 
+import java.net.URI;
+import java.util.Set;
+
+import static org.junit.Assert.*;
+
 /**
  * Test ZK based metadata store.
  */
 public class TestZKLogMetadataStore extends TestDistributedLogBase {
 
-    private static final  int zkSessionTimeoutMs = 2000;
+    private final static int zkSessionTimeoutMs = 2000;
 
     @Rule
     public TestName runtime = new TestName();
@@ -105,20 +106,7 @@ public class TestZKLogMetadataStore extends TestDistributedLogBase {
             logs.add(logName);
             createLogInNamespace(uri, logName);
         }
-        Set<String> result = Sets.newHashSet(Utils.ioResult(metadataStore.getLogs("")));
-        assertEquals(10, result.size());
-        assertTrue(Sets.difference(logs, result).isEmpty());
-    }
-
-    @Test(timeout = 60000)
-    public void testGetLogsPrefix() throws Exception {
-        Set<String> logs = Sets.newHashSet();
-        for (int i = 0; i < 10; i++) {
-            String logName = "test-" + i;
-            logs.add(logName);
-            createLogInNamespace(uri, "test/" + logName);
-        }
-        Set<String> result = Sets.newHashSet(Utils.ioResult(metadataStore.getLogs("test")));
+        Set<String> result = Sets.newHashSet(Utils.ioResult(metadataStore.getLogs()));
         assertEquals(10, result.size());
         assertTrue(Sets.difference(logs, result).isEmpty());
     }

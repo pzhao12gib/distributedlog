@@ -17,25 +17,27 @@
  */
 package org.apache.distributedlog;
 
-import static org.junit.Assert.*;
-import com.google.common.base.Optional;
-import com.google.common.collect.Lists;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import com.google.common.base.Optional;
+import com.google.common.collect.Lists;
 import org.apache.distributedlog.api.AsyncLogWriter;
 import org.apache.distributedlog.logsegment.LogSegmentFilter;
 import org.apache.distributedlog.util.Utils;
+
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.junit.Assert.*;
 
 /**
- * Test {@link ReadUtils}.
+ * Test {@link ReadUtils}
  */
 public class TestReadUtils extends TestDistributedLogBase {
 
@@ -57,18 +59,15 @@ public class TestReadUtils extends TestDistributedLogBase {
         );
     }
 
-    private CompletableFuture<LogRecordWithDLSN> getFirstGreaterThanRecord(BKDistributedLogManager bkdlm,
-                                                                           int ledgerNo, DLSN dlsn) throws Exception {
+    private CompletableFuture<LogRecordWithDLSN> getFirstGreaterThanRecord(BKDistributedLogManager bkdlm, int ledgerNo, DLSN dlsn) throws Exception {
         List<LogSegmentMetadata> ledgerList = bkdlm.getLogSegments();
         return ReadUtils.asyncReadFirstUserRecord(
-                bkdlm.getStreamName(), ledgerList.get(ledgerNo),
-                2, 16, new AtomicInteger(0), Executors.newFixedThreadPool(1),
+                bkdlm.getStreamName(), ledgerList.get(ledgerNo), 2, 16, new AtomicInteger(0), Executors.newFixedThreadPool(1),
                 bkdlm.getReaderEntryStore(), dlsn
         );
     }
 
-    private CompletableFuture<LogRecordWithDLSN> getLastUserRecord(BKDistributedLogManager bkdlm, int ledgerNo)
-            throws Exception {
+    private CompletableFuture<LogRecordWithDLSN> getLastUserRecord(BKDistributedLogManager bkdlm, int ledgerNo) throws Exception {
         BKLogReadHandler readHandler = bkdlm.createReadHandler();
         List<LogSegmentMetadata> ledgerList = Utils.ioResult(
                 readHandler.readLogSegmentsFromStore(
@@ -77,8 +76,7 @@ public class TestReadUtils extends TestDistributedLogBase {
                         null)
         ).getValue();
         return ReadUtils.asyncReadLastRecord(
-                bkdlm.getStreamName(), ledgerList.get(ledgerNo),
-                false, false, false, 2, 16, new AtomicInteger(0), Executors.newFixedThreadPool(1),
+                bkdlm.getStreamName(), ledgerList.get(ledgerNo), false, false, false, 2, 16, new AtomicInteger(0), Executors.newFixedThreadPool(1),
                 bkdlm.getReaderEntryStore()
         );
     }
@@ -89,7 +87,7 @@ public class TestReadUtils extends TestDistributedLogBase {
         BKDistributedLogManager bkdlm = (BKDistributedLogManager) createNewDLM(conf, streamName);
         DLMTestUtil.generateLogSegmentNonPartitioned(bkdlm, 0, 5, 1 /* txid */);
 
-        DLSN dlsn = new DLSN(1, 0, 0);
+        DLSN dlsn = new DLSN(1,0,0);
         CompletableFuture<LogRecordWithDLSN> futureLogrec = getFirstGreaterThanRecord(bkdlm, 0, dlsn);
         LogRecordWithDLSN logrec = Utils.ioResult(futureLogrec);
         assertEquals("should be an exact match", dlsn, logrec.getDlsn());
@@ -102,7 +100,7 @@ public class TestReadUtils extends TestDistributedLogBase {
         BKDistributedLogManager bkdlm = (BKDistributedLogManager) createNewDLM(conf, streamName);
         DLMTestUtil.generateLogSegmentNonPartitioned(bkdlm, 0, 5, 1 /* txid */);
 
-        DLSN dlsn = new DLSN(1, 1, 0);
+        DLSN dlsn = new DLSN(1,1,0);
         CompletableFuture<LogRecordWithDLSN> futureLogrec = getFirstGreaterThanRecord(bkdlm, 0, dlsn);
         LogRecordWithDLSN logrec = Utils.ioResult(futureLogrec);
         assertEquals("should be an exact match", dlsn, logrec.getDlsn());
@@ -115,10 +113,10 @@ public class TestReadUtils extends TestDistributedLogBase {
         BKDistributedLogManager bkdlm = (BKDistributedLogManager) createNewDLM(conf, streamName);
         DLMTestUtil.generateLogSegmentNonPartitioned(bkdlm, 0, 5, 1 /* txid */);
 
-        DLSN dlsn = new DLSN(1, 0, 1);
+        DLSN dlsn = new DLSN(1,0,1);
         CompletableFuture<LogRecordWithDLSN> futureLogrec = getFirstGreaterThanRecord(bkdlm, 0, dlsn);
         LogRecordWithDLSN logrec = Utils.ioResult(futureLogrec);
-        assertEquals(new DLSN(1, 1, 0), logrec.getDlsn());
+        assertEquals(new DLSN(1,1,0), logrec.getDlsn());
         bkdlm.close();
     }
 
@@ -128,7 +126,7 @@ public class TestReadUtils extends TestDistributedLogBase {
         BKDistributedLogManager bkdlm = (BKDistributedLogManager) createNewDLM(conf, streamName);
         DLMTestUtil.generateLogSegmentNonPartitioned(bkdlm, 0, 5 /* user recs */ , 1 /* txid */);
 
-        DLSN dlsn = new DLSN(2, 0, 0);
+        DLSN dlsn = new DLSN(2,0,0);
         CompletableFuture<LogRecordWithDLSN> futureLogrec = getFirstGreaterThanRecord(bkdlm, 0, dlsn);
         LogRecordWithDLSN logrec = Utils.ioResult(futureLogrec);
         assertEquals(null, logrec);
@@ -144,10 +142,10 @@ public class TestReadUtils extends TestDistributedLogBase {
         txid += DLMTestUtil.generateLogSegmentNonPartitioned(bkdlm, 0, 5 /* user recs */ , txid);
         txid += DLMTestUtil.generateLogSegmentNonPartitioned(bkdlm, 0, 5 /* user recs */ , txid);
 
-        DLSN dlsn = new DLSN(1, 3, 0);
+        DLSN dlsn = new DLSN(1,3,0);
         CompletableFuture<LogRecordWithDLSN> futureLogrec = getFirstGreaterThanRecord(bkdlm, 1, dlsn);
         LogRecordWithDLSN logrec = Utils.ioResult(futureLogrec);
-        assertEquals(new DLSN(2, 0, 0), logrec.getDlsn());
+        assertEquals(new DLSN(2,0,0), logrec.getDlsn());
         bkdlm.close();
     }
 
@@ -157,10 +155,10 @@ public class TestReadUtils extends TestDistributedLogBase {
         BKDistributedLogManager bkdlm = (BKDistributedLogManager) createNewDLM(conf, streamName);
         DLMTestUtil.generateLogSegmentNonPartitioned(bkdlm, 5 /* control recs */, 5, 1 /* txid */);
 
-        DLSN dlsn = new DLSN(1, 3, 0);
+        DLSN dlsn = new DLSN(1,3,0);
         CompletableFuture<LogRecordWithDLSN> futureLogrec = getFirstGreaterThanRecord(bkdlm, 0, dlsn);
         LogRecordWithDLSN logrec = Utils.ioResult(futureLogrec);
-        assertEquals(new DLSN(1, 5, 0), logrec.getDlsn());
+        assertEquals(new DLSN(1,5,0), logrec.getDlsn());
         bkdlm.close();
     }
 
@@ -172,7 +170,7 @@ public class TestReadUtils extends TestDistributedLogBase {
 
         CompletableFuture<LogRecordWithDLSN> futureLogrec = getLastUserRecord(bkdlm, 0);
         LogRecordWithDLSN logrec = Utils.ioResult(futureLogrec);
-        assertEquals(new DLSN(1, 9, 0), logrec.getDlsn());
+        assertEquals(new DLSN(1,9,0), logrec.getDlsn());
         bkdlm.close();
     }
 
@@ -192,7 +190,7 @@ public class TestReadUtils extends TestDistributedLogBase {
 
         CompletableFuture<LogRecordWithDLSN> futureLogrec = getLastUserRecord(bkdlm, 0);
         LogRecordWithDLSN logrec = Utils.ioResult(futureLogrec);
-        assertEquals(new DLSN(1, 2, 0), logrec.getDlsn());
+        assertEquals(new DLSN(1,2,0), logrec.getDlsn());
         bkdlm.close();
     }
 

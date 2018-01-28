@@ -18,9 +18,7 @@
 package org.apache.distributedlog.limiter;
 
 import org.apache.distributedlog.exceptions.OverCapacityException;
-/**
- * RequestLimiter.
- */
-public interface RequestLimiter<RequestT> {
-    void apply(RequestT request) throws OverCapacityException;
+
+public interface RequestLimiter<Request> {
+    public void apply(Request request) throws OverCapacityException;
 }

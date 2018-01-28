@@ -17,11 +17,12 @@
  */
 package org.apache.distributedlog.config;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 
 import com.google.common.collect.Lists;
+import org.apache.distributedlog.DistributedLogConfiguration;
+
 import java.io.File;
 import java.net.MalformedURLException;
 import java.util.HashMap;
@@ -31,11 +32,7 @@ import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-
-
-
 import org.apache.commons.configuration.ConfigurationException;
-import org.apache.distributedlog.DistributedLogConfiguration;
 
 import org.apache.distributedlog.common.config.ConcurrentBaseConfiguration;
 import org.apache.distributedlog.common.config.ConcurrentConstConfiguration;
@@ -60,8 +57,7 @@ public class DynamicConfigurationFactory {
     private final int reloadPeriod;
     private final TimeUnit reloadUnit;
 
-    public DynamicConfigurationFactory(ScheduledExecutorService executorService,
-                                       int reloadPeriod, TimeUnit reloadUnit) {
+    public DynamicConfigurationFactory(ScheduledExecutorService executorService, int reloadPeriod, TimeUnit reloadUnit) {
         this.executorService = executorService;
         this.reloadPeriod = reloadPeriod;
         this.reloadUnit = reloadUnit;
@@ -72,7 +68,7 @@ public class DynamicConfigurationFactory {
     public synchronized Optional<DynamicDistributedLogConfiguration> getDynamicConfiguration(
             String configPath,
             ConcurrentBaseConfiguration defaultConf) throws ConfigurationException {
-        checkNotNull(configPath);
+        Preconditions.checkNotNull(configPath);
         try {
             if (!dynamicConfigs.containsKey(configPath)) {
                 File configFile = new File(configPath);
@@ -93,8 +89,7 @@ public class DynamicConfigurationFactory {
         }
     }
 
-    public synchronized Optional<DynamicDistributedLogConfiguration>
-    getDynamicConfiguration(String configPath) throws ConfigurationException {
+    public synchronized Optional<DynamicDistributedLogConfiguration> getDynamicConfiguration(String configPath) throws ConfigurationException {
         return getDynamicConfiguration(configPath, new ConcurrentConstConfiguration(new DistributedLogConfiguration()));
     }
 }

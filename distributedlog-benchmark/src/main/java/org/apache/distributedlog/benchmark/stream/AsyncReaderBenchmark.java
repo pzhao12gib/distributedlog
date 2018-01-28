@@ -109,12 +109,11 @@ public class AsyncReaderBenchmark extends AbstractReaderBenchmark {
                     reader = FutureUtils.result(dlm.openAsyncLogReader(lastDLSN));
                 }
                 long elapsedMs = stopwatch.elapsed(TimeUnit.MICROSECONDS);
-                openReaderStats.registerSuccessfulEvent(elapsedMs, TimeUnit.MICROSECONDS);
+                openReaderStats.registerSuccessfulEvent(elapsedMs);
                 logger.info("It took {} ms to position the reader to transaction id = {}, dlsn = {}",
                         lastTxId, lastDLSN);
             } catch (Exception ioe) {
-                openReaderStats.registerFailedEvent(
-                    stopwatch.elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+                openReaderStats.registerFailedEvent(stopwatch.elapsed(TimeUnit.MICROSECONDS));
                 logger.warn("Failed to create reader for stream {} reading from tx id = {}, dlsn = {}.",
                         new Object[] { streamName, lastTxId, lastDLSN });
             }
@@ -134,7 +133,7 @@ public class AsyncReaderBenchmark extends AbstractReaderBenchmark {
                     stopwatch.start();
                     records = FutureUtils.result(reader.readBulk(batchSize));
                     long elapsedMicros = stopwatch.stop().elapsed(TimeUnit.MICROSECONDS);
-                    blockingReadStats.registerSuccessfulEvent(elapsedMicros, TimeUnit.MICROSECONDS);
+                    blockingReadStats.registerSuccessfulEvent(elapsedMicros);
                     if (!records.isEmpty()) {
                         readCounter.add(records.size());
                         LogRecordWithDLSN lastRecord = records.get(records.size() - 1);

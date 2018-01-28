@@ -1,4 +1,3 @@
-<?xml version="1.0"?>
 <!--
    Licensed to the Apache Software Foundation (ASF) under one or more
    contributor license agreements.  See the NOTICE file distributed with
@@ -25,7 +24,7 @@
   <groupId>org.apache.distributedlog</groupId>
   <artifactId>distributedlog</artifactId>
   <packaging>pom</packaging>
-  <version>0.6.0-SNAPSHOT</version>
+  <version>0.5.0-SNAPSHOT</version>
   <name>Apache DistributedLog :: Parent</name>
   <description>
     Apache DistributedLog provides a high performance replicated log service.
@@ -40,10 +39,10 @@
     </license>
   </licenses>
   <scm>
-    <connection>scm:git:https://github.com/apache/distributedlog.git</connection>
-    <developerConnection>scm:git:https://github.com/apache/distributedlog.git</developerConnection>
-    <url>https://github.com/apache/distributedlog</url>
-    <tag>HEAD</tag>
+    <connection>scm:git:https://gitbox.apache.org/repos/asf/distributedlog.git</connection>
+    <developerConnection>scm:git:https://gitbox.apache.org/repos/asf/distributedlog.git</developerConnection>
+    <url>https://gitbox.apache.org/repos/asf?p=distributedlog.git;a=summary</url>
+    <tag>release-0.5.0</tag>
   </scm>
   <issueManagement>
     <system>jira</system>
@@ -86,46 +85,40 @@
     <module>distributedlog-common</module>
     <module>distributedlog-protocol</module>
     <module>distributedlog-core</module>
-    <module>distributedlog-io</module>
     <module>distributedlog-proxy-protocol</module>
     <module>distributedlog-proxy-client</module>
     <module>distributedlog-proxy-server</module>
     <module>distributedlog-benchmark</module>
     <module>distributedlog-tutorials</module>
     <module>distributedlog-core-twitter</module>
-    <module>tests</module>
-    <module>distributedlog-dist</module>
   </modules>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <!-- dependencies -->
-    <bookkeeper.version>4.7.0-SNAPSHOT</bookkeeper.version>
+    <bookkeeper.version>4.3.7-TWTTR-OSS</bookkeeper.version>
     <codahale.metrics.version>3.0.1</codahale.metrics.version>
     <commons-cli.version>1.1</commons-cli.version>
     <commons-codec.version>1.6</commons-codec.version>
     <commons-lang.version>2.6</commons-lang.version>
     <commons-lang3.version>3.3.2</commons-lang3.version>
-    <curator.version>4.0.0</curator.version>
+    <curator.version>3.2.1</curator.version>
     <finagle.version>6.34.0</finagle.version>
     <freebuilder.version>1.12.3</freebuilder.version>
     <guava.version>20.0</guava.version>
-    <jetty.version>9.3.11.v20160721</jetty.version>
-    <jmh.version>1.19</jmh.version>
+    <jetty.version>8.1.19.v20160209</jetty.version>
     <jmock.version>2.8.2</jmock.version>
     <junit.version>4.8.1</junit.version>
     <libthrift.version>0.5.0-1</libthrift.version>
     <lombok.version>1.16.16</lombok.version>
-    <lz4.version>1.3.0</lz4.version>
+    <lz4.version>1.2.0</lz4.version>
     <mockito.version>1.9.5</mockito.version>
-    <netty.version>4.1.12.Final</netty.version>
     <scrooge.version>4.6.0</scrooge.version>
     <slf4j.version>1.6.4</slf4j.version>
-    <prometheus.version>0.0.21</prometheus.version>
     <stats-util.version>0.0.58</stats-util.version>
-    <zookeeper.version>3.5.3-beta</zookeeper.version>
+    <zookeeper.version>3.5.1-alpha</zookeeper.version>
     <!-- plugin dependencies -->
-    <apache-rat-plugin.version>0.12</apache-rat-plugin.version>
+    <apache-rat-plugin.version>0.7</apache-rat-plugin.version>
     <cobertura-maven-plugin.version>2.7</cobertura-maven-plugin.version>
     <coveralls-maven-plugin.version>4.1.0</coveralls-maven-plugin.version>
     <findbugs-maven-plugin.version>3.0.3</findbugs-maven-plugin.version>
@@ -133,14 +126,15 @@
     <maven-assembly-plugin.version>2.2.1</maven-assembly-plugin.version>
     <maven-checkstyle-plugin.version>2.17</maven-checkstyle-plugin.version>
     <maven-compiler-plugin.version>3.1</maven-compiler-plugin.version>
-    <maven-deploy-plugin.version>2.7</maven-deploy-plugin.version>
     <maven-jar-plugin.version>2.2</maven-jar-plugin.version>
     <maven-javadoc-plugin.version>2.8</maven-javadoc-plugin.version>
     <maven-shade-plugin.version>2.4.3</maven-shade-plugin.version>
     <maven-source-plugin.version>2.2.1</maven-source-plugin.version>
     <maven-surefire-plugin.version>2.19.1</maven-surefire-plugin.version>
     <scrooge-maven-plugin.version>3.17.0</scrooge-maven-plugin.version>
-  </properties>
+  <gib.referenceBranch>HEAD^1</gib.referenceBranch>
+        <gib.enabled>true</gib.enabled>
+    </properties>
   <build>
     <plugins>
       <plugin>
@@ -149,7 +143,7 @@
         <version>${maven-javadoc-plugin.version}</version>
         <configuration>
           <!-- Avoid for missing javadoc comments to be marked as errors -->
-          <additionalparam>-Xdoclint:none -notimestamp</additionalparam>
+          <additionalparam>-Xdoclint:none</additionalparam>
           <groups>
             <group>
               <title>Core Library</title>
@@ -178,7 +172,7 @@
         <artifactId>maven-assembly-plugin</artifactId>
         <version>${maven-assembly-plugin.version}</version>
         <configuration>
-          <tarLongFileMode>gnu</tarLongFileMode>
+	  <tarLongFileMode>gnu</tarLongFileMode>
           <descriptors>
             <descriptor>src/assemble/src.xml</descriptor>
           </descriptors>
@@ -188,9 +182,6 @@
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>findbugs-maven-plugin</artifactId>
         <version>${findbugs-maven-plugin.version}</version>
-        <configuration>
-          <excludeFilterFile>${session.executionRootDirectory}/distributedlog-build-tools/src/main/resources/distributedlog/findbugsExclude.xml</excludeFilterFile>
-        </configuration>
       </plugin>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
@@ -219,7 +210,7 @@
         <version>${maven-surefire-plugin.version}</version>
         <configuration>
           <redirectTestOutputToFile>true</redirectTestOutputToFile>
-          <argLine>-Xmx3G -Djava.net.preferIPv4Stack=true -XX:MaxDirectMemorySize=2G -Dio.netty.leakDetection.level=PARANOID</argLine>
+          <argLine>-Xmx3G -Djava.net.preferIPv4Stack=true -XX:MaxDirectMemorySize=2G</argLine>
           <forkMode>always</forkMode>
           <forkedProcessTimeoutInSeconds>1800</forkedProcessTimeoutInSeconds>
         </configuration>
@@ -230,38 +221,27 @@
         <version>${apache-rat-plugin.version}</version>
         <configuration>
           <excludes>
-            <exclude>ChangeLog</exclude>
-            <exclude>CONFIG.ini</exclude>
-            <exclude>GROUPS</exclude>
-            <exclude>OWNERS</exclude>
-            <exclude>dist/**/*</exclude>
             <exclude>docs/**/*</exclude>
-            <exclude>scripts/dev/reviewers</exclude>
             <exclude>website/**/*</exclude>
-            <exclude>**/*.md</exclude>
-            <exclude>**/apidocs/*</exclude>
-            <exclude>**/dependency-reduced-pom.xml</exclude>
-            <exclude>**/org/apache/distributedlog/thrift/*</exclude>
-            <exclude>**/logs/*.log</exclude>
-            <exclude>**/target/**/*</exclude>
-            <!-- Git -->
             <exclude>.git/**/*</exclude>
             <exclude>.github/**/*</exclude>
             <exclude>.gitignore</exclude>
-            <exclude>docker/.gitignore</exclude>
             <exclude>.idea/**/*</exclude>
-            <!-- Intellij -->
-            <exclude>**/*.iml</exclude>
-            <exclude>**/*.iws</exclude>
-            <exclude>**/*.ipr</exclude>
-            <!-- SVN -->
+            <exclude>dist/**/*</exclude>
             <exclude>**/.svn/**/*</exclude>
-            <!-- Maven -->
-            <exclude>.repository/**</exclude>
-            <!-- Grafana -->
-            <exclude>docker/grafana/dashboards/*.json</exclude>
-          </excludes>
-          <consoleOutput>true</consoleOutput>
+            <exclude>ChangeLog</exclude>
+            <exclude>**/README.md</exclude>
+            <exclude>**/apidocs/*</exclude>
+	    <exclude>GROUPS</exclude>
+	    <exclude>OWNERS</exclude>
+	    <exclude>CONFIG.ini</exclude>
+            <exclude>**/**.md</exclude>
+            <exclude>scripts/dev/reviewers</exclude>
+            <exclude>**/dependency-reduced-pom.xml</exclude>
+            <exclude>**/org/apache/distributedlog/thrift/*</exclude>
+          <exclude>**/NOW</exclude>
+                        <exclude>**/.travis.yml</exclude>
+                    </excludes>
         </configuration>
       </plugin>
       <!-- Report jacoco coverage to coveralls.io -->
@@ -282,5 +262,28 @@
         </configuration>
       </plugin>
     </plugins>
-  </build>
+  <extensions>
+            <extension>
+                <groupId>com.vackosar.gitflowincrementalbuilder</groupId>
+                <artifactId>gitflow-incremental-builder</artifactId>
+                <version>3.4</version>
+            </extension>
+        </extensions>
+    </build>
+  <repositories>
+    <repository>
+      <id>bookkeeper-twitter-mvn-repo</id>
+      <url>https://raw.github.com/twitter/bookkeeper/mvn-repo/${bookkeeper.version}</url>
+      <snapshots>
+        <enabled>true</enabled>
+        <updatePolicy>always</updatePolicy>
+      </snapshots>
+    </repository> 
+    <repository>
+      <id>twitter-repo</id>
+      <name>Twitter Maven Repo</name>
+      <url>http://maven.twttr.com</url>
+    </repository>
+  </repositories>
 </project>
+

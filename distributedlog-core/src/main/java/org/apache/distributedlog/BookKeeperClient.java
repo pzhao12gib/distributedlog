@@ -17,12 +17,7 @@
  */
 package org.apache.distributedlog;
 
-import static com.google.common.base.Charsets.UTF_8;
 import com.google.common.base.Optional;
-import io.netty.channel.EventLoopGroup;
-import io.netty.util.HashedWheelTimer;
-import java.io.IOException;
-import java.util.Collections;
 import java.util.concurrent.CompletableFuture;
 import org.apache.bookkeeper.client.AsyncCallback;
 import org.apache.bookkeeper.client.BKException;
@@ -38,15 +33,21 @@ import org.apache.bookkeeper.zookeeper.RetryPolicy;
 import org.apache.commons.configuration.ConfigurationException;
 import org.apache.distributedlog.ZooKeeperClient.Credentials;
 import org.apache.distributedlog.ZooKeeperClient.DigestCredentials;
-import org.apache.distributedlog.common.concurrent.FutureUtils;
 import org.apache.distributedlog.exceptions.AlreadyClosedException;
 import org.apache.distributedlog.exceptions.DLInterruptedException;
+import org.apache.distributedlog.exceptions.ZKException;
 import org.apache.distributedlog.net.NetUtils;
 import org.apache.distributedlog.util.ConfUtils;
+import org.apache.distributedlog.common.concurrent.FutureUtils;
+import org.apache.zookeeper.KeeperException;
+import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
+import org.jboss.netty.util.HashedWheelTimer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 
+import static com.google.common.base.Charsets.UTF_8;
 
 /**
  * BookKeeper Client wrapper over {@link BookKeeper}.
@@ -65,7 +66,7 @@ public class BookKeeperClient {
     private final String zkServers;
     private final String ledgersPath;
     private final byte[] passwd;
-    private final EventLoopGroup eventLoopGroup;
+    private final ClientSocketChannelFactory channelFactory;
     private final HashedWheelTimer requestTimer;
     private final StatsLogger statsLogger;
 
@@ -79,11 +80,9 @@ public class BookKeeperClient {
 
     @SuppressWarnings("deprecation")
     private synchronized void commonInitialization(
-            DistributedLogConfiguration conf,
-            String ledgersPath,
-            EventLoopGroup eventLoopGroup,
-            StatsLogger statsLogger, HashedWheelTimer requestTimer)
-        throws IOException, InterruptedException {
+            DistributedLogConfiguration conf, String ledgersPath,
+            ClientSocketChannelFactory channelFactory, StatsLogger statsLogger, HashedWheelTimer requestTimer)
+        throws IOException, InterruptedException, KeeperException {
         ClientConfiguration bkConfig = new ClientConfiguration();
         bkConfig.setAddEntryTimeout(conf.getBKClientWriteTimeout());
         bkConfig.setReadTimeout(conf.getBKClientReadTimeout());
@@ -107,18 +106,15 @@ public class BookKeeperClient {
         final DNSToSwitchMapping dnsResolver =
                 NetUtils.getDNSResolver(dnsResolverCls, conf.getBkDNSResolverOverrides());
 
-        try {
-            this.bkc = BookKeeper.forConfig(bkConfig)
-                .setZookeeper(zkc.get())
-                .setEventLoopGroup(eventLoopGroup)
-                .setStatsLogger(statsLogger)
-                .dnsResolver(dnsResolver)
-                .requestTimer(requestTimer)
-                .featureProvider(featureProvider.orNull())
-                .build();
-        } catch (BKException bke) {
-            throw new IOException(bke);
-        }
+        this.bkc = BookKeeper.newBuilder()
+            .config(bkConfig)
+            .zk(zkc.get())
+            .channelFactory(channelFactory)
+            .statsLogger(statsLogger)
+            .dnsResolver(dnsResolver)
+            .requestTimer(requestTimer)
+            .featureProvider(featureProvider.orNull())
+            .build();
     }
 
     BookKeeperClient(DistributedLogConfiguration conf,
@@ -126,7 +122,7 @@ public class BookKeeperClient {
                      String zkServers,
                      ZooKeeperClient zkc,
                      String ledgersPath,
-                     EventLoopGroup eventLoopGroup,
+                     ClientSocketChannelFactory channelFactory,
                      HashedWheelTimer requestTimer,
                      StatsLogger statsLogger,
                      Optional<FeatureProvider> featureProvider) {
@@ -135,7 +131,7 @@ public class BookKeeperClient {
         this.zkServers = zkServers;
         this.ledgersPath = ledgersPath;
         this.passwd = conf.getBKDigestPW().getBytes(UTF_8);
-        this.eventLoopGroup = eventLoopGroup;
+        this.channelFactory = channelFactory;
         this.requestTimer = requestTimer;
         this.statsLogger = statsLogger;
         this.featureProvider = featureProvider;
@@ -161,26 +157,28 @@ public class BookKeeperClient {
             }
 
             this.zkc = new ZooKeeperClient(name + ":zk", zkSessionTimeout, 2 * zkSessionTimeout, zkServers,
-                                           retryPolicy, statsLogger.scope("bkc_zkc"),
-                    conf.getZKClientNumberRetryThreads(), conf.getBKClientZKRequestRateLimit(), credentials);
+                                           retryPolicy, statsLogger.scope("bkc_zkc"), conf.getZKClientNumberRetryThreads(),
+                                           conf.getBKClientZKRequestRateLimit(), credentials);
         }
 
         try {
-            commonInitialization(conf, ledgersPath, eventLoopGroup, statsLogger, requestTimer);
+            commonInitialization(conf, ledgersPath, channelFactory, statsLogger, requestTimer);
         } catch (InterruptedException e) {
             throw new DLInterruptedException("Interrupted on creating bookkeeper client " + name + " : ", e);
+        } catch (KeeperException e) {
+            throw new ZKException("Error on creating bookkeeper client " + name + " : ", e);
         }
 
         if (ownZK) {
-            LOG.info("BookKeeper Client created {} with its own ZK Client : ledgersPath = {}, numRetries = {}, "
-                            + "sessionTimeout = {}, backoff = {}, maxBackoff = {}, dnsResolver = {}",
+            LOG.info("BookKeeper Client created {} with its own ZK Client : ledgersPath = {}, numRetries = {}, " +
+                    "sessionTimeout = {}, backoff = {}, maxBackoff = {}, dnsResolver = {}",
                     new Object[] { name, ledgersPath,
                     conf.getBKClientZKNumRetries(), conf.getBKClientZKSessionTimeoutMilliSeconds(),
                     conf.getBKClientZKRetryBackoffStartMillis(), conf.getBKClientZKRetryBackoffMaxMillis(),
                     conf.getBkDNSResolverOverrides() });
         } else {
-            LOG.info("BookKeeper Client created {} with shared zookeeper client : ledgersPath = {}, numRetries = {}, "
-                            + "sessionTimeout = {}, backoff = {}, maxBackoff = {}, dnsResolver = {}",
+            LOG.info("BookKeeper Client created {} with shared zookeeper client : ledgersPath = {}, numRetries = {}, " +
+                    "sessionTimeout = {}, backoff = {}, maxBackoff = {}, dnsResolver = {}",
                     new Object[] { name, ledgersPath,
                     conf.getZKNumRetries(), conf.getZKSessionTimeoutMilliseconds(),
                     conf.getZKRetryBackoffStartMillis(), conf.getZKRetryBackoffMaxMillis(),
@@ -218,7 +216,7 @@ public class BookKeeperClient {
                             promise.completeExceptionally(BKException.create(rc));
                         }
                     }
-                }, null, Collections.emptyMap());
+                }, null);
         return promise;
     }
 

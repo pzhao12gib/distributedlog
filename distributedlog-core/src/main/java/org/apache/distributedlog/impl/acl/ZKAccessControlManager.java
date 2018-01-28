@@ -18,24 +18,15 @@
 package org.apache.distributedlog.impl.acl;
 
 import com.google.common.collect.Sets;
-import java.io.IOException;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.bookkeeper.util.ZkUtils;
 import org.apache.distributedlog.DistributedLogConfiguration;
 import org.apache.distributedlog.ZooKeeperClient;
 import org.apache.distributedlog.acl.AccessControlManager;
-import org.apache.distributedlog.common.concurrent.FutureEventListener;
-import org.apache.distributedlog.common.concurrent.FutureUtils;
 import org.apache.distributedlog.exceptions.DLInterruptedException;
 import org.apache.distributedlog.thrift.AccessControlEntry;
+import org.apache.bookkeeper.util.ZkUtils;
+import org.apache.distributedlog.common.concurrent.FutureEventListener;
+import org.apache.distributedlog.common.concurrent.FutureUtils;
 import org.apache.zookeeper.AsyncCallback;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.KeeperException;
@@ -46,10 +37,18 @@ import org.apache.zookeeper.data.Stat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * ZooKeeper Based {@link org.apache.distributedlog.acl.AccessControlManager}.
+ * ZooKeeper Based {@link org.apache.distributedlog.acl.AccessControlManager}
  */
 public class ZKAccessControlManager implements AccessControlManager, Watcher {
 
@@ -79,16 +78,13 @@ public class ZKAccessControlManager implements AccessControlManager, Watcher {
             FutureUtils.result(fetchDefaultAccessControlEntry());
         } catch (Throwable t) {
             if (t instanceof InterruptedException) {
-                throw new DLInterruptedException("Interrupted on getting default access control entry for "
-                        + zkRootPath, t);
+                throw new DLInterruptedException("Interrupted on getting default access control entry for " + zkRootPath, t);
             } else if (t instanceof KeeperException) {
-                throw new IOException("Encountered zookeeper exception on getting default access control entry for "
-                        + zkRootPath, t);
+                throw new IOException("Encountered zookeeper exception on getting default access control entry for " + zkRootPath, t);
             } else if (t instanceof IOException) {
                 throw (IOException) t;
             } else {
-                throw new IOException("Encountered unknown exception on getting access control entries for "
-                        + zkRootPath, t);
+                throw new IOException("Encountered unknown exception on getting access control entries for " + zkRootPath, t);
             }
         }
 
@@ -98,13 +94,11 @@ public class ZKAccessControlManager implements AccessControlManager, Watcher {
             if (t instanceof InterruptedException) {
                 throw new DLInterruptedException("Interrupted on getting access control entries for " + zkRootPath, t);
             } else if (t instanceof KeeperException) {
-                throw new IOException("Encountered zookeeper exception on getting access control entries for "
-                        + zkRootPath, t);
+                throw new IOException("Encountered zookeeper exception on getting access control entries for " + zkRootPath, t);
             } else if (t instanceof IOException) {
                 throw (IOException) t;
             } else {
-                throw new IOException("Encountered unknown exception on getting access control entries for "
-                        + zkRootPath, t);
+                throw new IOException("Encountered unknown exception on getting access control entries for " + zkRootPath, t);
             }
         }
     }
@@ -167,8 +161,7 @@ public class ZKAccessControlManager implements AccessControlManager, Watcher {
                     for (String s : streamsRemoved) {
                         ZKAccessControl accessControl = streamEntries.remove(s);
                         if (null != accessControl) {
-                            logger.info("Removed Access Control Entry for stream {} : {}",
-                                    s, accessControl.getAccessControlEntry());
+                            logger.info("Removed Access Control Entry for stream {} : {}", s, accessControl.getAccessControlEntry());
                         }
                     }
                     if (streamsReceived.isEmpty()) {
@@ -185,8 +178,7 @@ public class ZKAccessControlManager implements AccessControlManager, Watcher {
                                     @Override
                                     public void onSuccess(ZKAccessControl accessControl) {
                                         streamEntries.put(streamName, accessControl);
-                                        logger.info("Added overrided access control for stream {} : {}",
-                                                streamName, accessControl.getAccessControlEntry());
+                                        logger.info("Added overrided access control for stream {} : {}", streamName, accessControl.getAccessControlEntry());
                                         complete();
                                     }
 
@@ -195,7 +187,7 @@ public class ZKAccessControlManager implements AccessControlManager, Watcher {
                                         if (cause instanceof KeeperException.NoNodeException) {
                                             streamEntries.remove(streamName);
                                         } else if (cause instanceof ZKAccessControl.CorruptedAccessControlException) {
-                                            logger.warn("Access control is corrupted for stream {} @ {},skipped it ...",
+                                            logger.warn("Access control is corrupted for stream {} @ {}, skipped it ...",
                                                         new Object[] { streamName, zkRootPath, cause });
                                             streamEntries.remove(streamName);
                                         } else {
@@ -296,8 +288,8 @@ public class ZKAccessControlManager implements AccessControlManager, Watcher {
                             return;
                         }
 
-                        logger.warn("Encountered an error on refetching default access control entry,"
-                                + " retrying in {} ms : ", ZK_RETRY_BACKOFF_MS, cause);
+                        logger.warn("Encountered an error on refetching default access control entry, retrying in {} ms : ",
+                                    ZK_RETRY_BACKOFF_MS, cause);
                         refetchDefaultAccessControlEntry(ZK_RETRY_BACKOFF_MS);
                     }
                 });
@@ -346,8 +338,8 @@ public class ZKAccessControlManager implements AccessControlManager, Watcher {
 
                             @Override
                             public void onFailure(Throwable cause) {
-                                logger.warn("Encountered an error on fetching all"
-                                        + " access control entries, retrying in {} ms : ", ZK_RETRY_BACKOFF_MS, cause);
+                                logger.warn("Encountered an error on fetching all access control entries, retrying in {} ms : ",
+                                            ZK_RETRY_BACKOFF_MS, cause);
                                 refetchAccessControlEntries(ZK_RETRY_BACKOFF_MS);
                             }
                         });
@@ -355,8 +347,8 @@ public class ZKAccessControlManager implements AccessControlManager, Watcher {
 
                     @Override
                     public void onFailure(Throwable cause) {
-                        logger.warn("Encountered an error on refetching all"
-                                + " access control entries, retrying in {} ms : ", ZK_RETRY_BACKOFF_MS, cause);
+                        logger.warn("Encountered an error on refetching all access control entries, retrying in {} ms : ",
+                                    ZK_RETRY_BACKOFF_MS, cause);
                         refetchAllAccessControlEntries(ZK_RETRY_BACKOFF_MS);
                     }
                 });

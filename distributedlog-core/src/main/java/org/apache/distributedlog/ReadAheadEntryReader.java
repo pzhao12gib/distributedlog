@@ -21,23 +21,10 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Ticker;
 import com.google.common.collect.Lists;
-import java.io.IOException;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
-import org.apache.bookkeeper.stats.AlertStatsLogger;
-import org.apache.bookkeeper.versioning.Versioned;
 import org.apache.distributedlog.callback.LogSegmentListener;
-import org.apache.distributedlog.common.concurrent.FutureEventListener;
-import org.apache.distributedlog.common.concurrent.FutureUtils;
 import org.apache.distributedlog.exceptions.AlreadyTruncatedTransactionException;
 import org.apache.distributedlog.exceptions.DLIllegalStateException;
 import org.apache.distributedlog.exceptions.DLInterruptedException;
@@ -48,17 +35,29 @@ import org.apache.distributedlog.io.AsyncCloseable;
 import org.apache.distributedlog.logsegment.LogSegmentEntryReader;
 import org.apache.distributedlog.logsegment.LogSegmentEntryStore;
 import org.apache.distributedlog.logsegment.LogSegmentFilter;
+import org.apache.distributedlog.common.concurrent.FutureEventListener;
+import org.apache.distributedlog.common.concurrent.FutureUtils;
 import org.apache.distributedlog.util.OrderedScheduler;
+import org.apache.bookkeeper.stats.AlertStatsLogger;
+import org.apache.bookkeeper.versioning.Versioned;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
+import java.io.IOException;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * New ReadAhead Reader that uses {@link org.apache.distributedlog.logsegment.LogSegmentEntryReader}.
  *
- * <p>NOTE: all the state changes happen in the same thread. All *unsafe* methods should be submitted to the order
- * scheduler using stream name as the key.</p>
+ * NOTE: all the state changes happen in the same thread. All *unsafe* methods should be submitted to the order
+ * scheduler using stream name as the key.
  */
 class ReadAheadEntryReader implements
         AsyncCloseable,
@@ -159,7 +158,7 @@ class ReadAheadEntryReader implements
         }
 
         @Override
-        public synchronized  void onSuccess(LogSegmentEntryReader reader) {
+        synchronized public void onSuccess(LogSegmentEntryReader reader) {
             this.reader = reader;
             if (reader.getSegment().isInProgress()) {
                 reader.registerListener(ReadAheadEntryReader.this);
@@ -432,10 +431,6 @@ class ReadAheadEntryReader implements
         }
     }
 
-    synchronized boolean isClosed() {
-        return null != closePromise;
-    }
-
     @Override
     public CompletableFuture<Void> asyncClose() {
         final CompletableFuture<Void> closeFuture;
@@ -561,14 +556,6 @@ class ReadAheadEntryReader implements
 
     @Override
     public void onSuccess(List<Entry.Reader> entries) {
-        if (isClosed()) {
-            // if readahead is closing, don't put the entries to the queue
-            for (Entry.Reader entry : entries) {
-                entry.release();
-            }
-            return;
-        }
-
         lastEntryAddedTime.reset().start();
         for (Entry.Reader entry : entries) {
             entryQueue.add(entry);
@@ -707,9 +694,6 @@ class ReadAheadEntryReader implements
     private boolean updateLogSegmentMetadata(SegmentReader reader,
                                              LogSegmentMetadata newMetadata) {
         if (reader.getSegment().getLogSegmentSequenceNumber() != newMetadata.getLogSegmentSequenceNumber()) {
-            logger.error("Inconsistent state found in entry reader for {} : "
-                + "current segment = {}, new segment = {}",
-                new Object[] { streamName, reader.getSegment(), newMetadata });
             setLastException(new DLIllegalStateException("Inconsistent state found in entry reader for "
                     + streamName + " : current segment = " + reader.getSegment() + ", new segment = " + newMetadata));
             return false;
@@ -727,7 +711,7 @@ class ReadAheadEntryReader implements
     }
 
     /**
-     * Reinitialize the log segments.
+     * Reinitialize the log segments
      */
     private void unsafeReinitializeLogSegments(List<LogSegmentMetadata> segments) {
         logger.info("Reinitialize log segments with {}", segments);
@@ -749,9 +733,6 @@ class ReadAheadEntryReader implements
             }
         } else {
             if (currentSegmentSequenceNumber != segment.getLogSegmentSequenceNumber()) {
-                logger.error("Inconsistent state found in entry reader for {} : "
-                    + "current segment sn = {}, new segment sn = {}",
-                    new Object[] { streamName, currentSegmentSequenceNumber, segment.getLogSegmentSequenceNumber() });
                 setLastException(new DLIllegalStateException("Inconsistent state found in entry reader for "
                         + streamName + " : current segment sn = " + currentSegmentSequenceNumber
                         + ", new segment sn = " + segment.getLogSegmentSequenceNumber()));
@@ -814,15 +795,15 @@ class ReadAheadEntryReader implements
                 continue;
             }
             // if the log segment is truncated, skip it.
-            if (skipTruncatedLogSegments
-                    && !conf.getIgnoreTruncationStatus()
-                    && segment.isTruncated()) {
+            if (skipTruncatedLogSegments &&
+                    !conf.getIgnoreTruncationStatus() &&
+                    segment.isTruncated()) {
                 continue;
             }
             // if the log segment is partially truncated, move the start dlsn to the min active dlsn
-            if (skipTruncatedLogSegments
-                    && !conf.getIgnoreTruncationStatus()
-                    && segment.isPartiallyTruncated()) {
+            if (skipTruncatedLogSegments &&
+                    !conf.getIgnoreTruncationStatus() &&
+                    segment.isPartiallyTruncated()) {
                 if (segment.getMinActiveDLSN().compareTo(fromDLSN) > 0) {
                     dlsnToStart = segment.getMinActiveDLSN();
                 }
@@ -884,8 +865,8 @@ class ReadAheadEntryReader implements
                     + " on a segment " + segment + " that is already marked as truncated"));
             return false;
         }
-        if (segment.isPartiallyTruncated()
-                && segment.getMinActiveDLSN().compareTo(fromDLSN) > 0) {
+        if (segment.isPartiallyTruncated() &&
+                segment.getMinActiveDLSN().compareTo(fromDLSN) > 0) {
             if (conf.getAlertWhenPositioningOnTruncated()) {
                 alertStatsLogger.raise("Trying to position reader on {} when {} is marked partially truncated",
                     fromDLSN, segment);

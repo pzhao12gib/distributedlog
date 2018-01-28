@@ -17,18 +17,17 @@
  */
 package org.apache.distributedlog;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import com.google.common.base.Optional;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
-import java.net.URL;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.Set;
-
+import org.apache.distributedlog.bk.QuorumConfig;
+import org.apache.distributedlog.feature.DefaultFeatureProvider;
+import org.apache.distributedlog.api.namespace.NamespaceBuilder;
+import org.apache.distributedlog.net.DNSResolverForRacks;
+import org.apache.distributedlog.net.DNSResolverForRows;
 import org.apache.bookkeeper.conf.ClientConfiguration;
 import org.apache.bookkeeper.feature.FeatureProvider;
 import org.apache.bookkeeper.net.DNSToSwitchMapping;
-
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.bookkeeper.util.ReflectionUtils;
 import org.apache.commons.configuration.CompositeConfiguration;
@@ -37,32 +36,30 @@ import org.apache.commons.configuration.ConfigurationException;
 import org.apache.commons.configuration.PropertiesConfiguration;
 import org.apache.commons.configuration.SystemConfiguration;
 import org.apache.commons.lang.StringUtils;
-import org.apache.distributedlog.api.namespace.NamespaceBuilder;
-
-
-import org.apache.distributedlog.bk.QuorumConfig;
-import org.apache.distributedlog.feature.DefaultFeatureProvider;
-import org.apache.distributedlog.net.DNSResolverForRacks;
-import org.apache.distributedlog.net.DNSResolverForRows;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.Set;
+
 /**
  * DistributedLog Configuration.
- *
- * <p>DistributedLog configuration is basically a properties based configuration, which extends from
+ * <p>
+ * DistributedLog configuration is basically a properties based configuration, which extends from
  * Apache commons {@link CompositeConfiguration}. All the DL settings are in camel case and prefixed
  * with a meaningful component name. for example, `zkSessionTimeoutSeconds` means <i>SessionTimeoutSeconds</i>
  * for component `zk`.
  *
- * <p></p><h3>BookKeeper Configuration</h3>
+ * <h3>BookKeeper Configuration</h3>
  *
- * <p></p>BookKeeper client configuration settings could be loaded via DistributedLog configuration. All those
+ * BookKeeper client configuration settings could be loaded via DistributedLog configuration. All those
  * settings are prefixed with <i>`bkc.`</i>. For example, <i>bkc.zkTimeout</i> in distributedlog configuration
  * will be applied as <i>`zkTimeout`</i> in bookkeeper client configuration.
  *
  * <h3>How to load configuration</h3>
+ *
  * The default distributedlog configuration is constructed by instantiated a new instance. This
  * distributedlog configuration will automatically load the settings that specified via
  * {@link SystemConfiguration}.
@@ -70,6 +67,7 @@ import org.slf4j.LoggerFactory;
  * <pre>
  *      DistributedLogConfiguration conf = new DistributedLogConfiguration();
  * </pre>
+ *
  * The recommended way is to load configuration from URL that points to a configuration file
  * ({@link #loadConf(URL)}).
  *
@@ -199,8 +197,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     public static final String BKDL_FIRST_LOGSEGMENT_SEQUENCE_NUMBER_OLD = "first-logsegment-sequence-number";
     public static final long BKDL_FIRST_LOGSEGMENT_SEQUENCE_NUMBER_DEFAULT =
             DistributedLogConstants.FIRST_LOGSEGMENT_SEQNO;
-    public static final String BKDL_LOGSEGMENT_SEQUENCE_NUMBER_VALIDATION_ENABLED =
-            "logSegmentSequenceNumberValidationEnabled";
+    public static final String BKDL_LOGSEGMENT_SEQUENCE_NUMBER_VALIDATION_ENABLED = "logSegmentSequenceNumberValidationEnabled";
     public static final boolean BKDL_LOGSEGMENT_SEQUENCE_NUMBER_VALIDATION_ENABLED_DEFAULT = true;
     public static final String BKDL_ENABLE_RECORD_COUNTS = "enableRecordCounts";
     public static final boolean BKDL_ENABLE_RECORD_COUNTS_DEFAULT = true;
@@ -233,7 +230,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     public static final String BKDL_LOG_FLUSH_TIMEOUT = "logFlushTimeoutSeconds";
     public static final int BKDL_LOG_FLUSH_TIMEOUT_DEFAULT = 30;
     /**
-     *  CompressionCodec.Type     String to use (See CompressionUtils).
+     *  CompressionCodec.Type     String to use (See CompressionUtils)
      *  ---------------------     ------------------------------------
      *          NONE               none
      *          LZ4                lz4
@@ -258,8 +255,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     public static final int BKDL_PERIODIC_FLUSH_FREQUENCY_MILLISECONDS_DEFAULT = 0;
     public static final String BKDL_ENABLE_IMMEDIATE_FLUSH = "enableImmediateFlush";
     public static final boolean BKDL_ENABLE_IMMEDIATE_FLUSH_DEFAULT = false;
-    public static final String BKDL_MINIMUM_DELAY_BETWEEN_IMMEDIATE_FLUSH_MILLISECONDS =
-            "minimumDelayBetweenImmediateFlushMilliSeconds";
+    public static final String BKDL_MINIMUM_DELAY_BETWEEN_IMMEDIATE_FLUSH_MILLISECONDS = "minimumDelayBetweenImmediateFlushMilliSeconds";
     public static final int BKDL_MINIMUM_DELAY_BETWEEN_IMMEDIATE_FLUSH_MILLISECONDS_DEFAULT = 0;
     public static final String BKDL_PERIODIC_KEEP_ALIVE_MILLISECONDS = "periodicKeepAliveMilliSeconds";
     public static final int BKDL_PERIODIC_KEEP_ALIVE_MILLISECONDS_DEFAULT = 0;
@@ -286,8 +282,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     public static final String BKDL_LOCK_TIMEOUT = "lockTimeoutSeconds";
     public static final long BKDL_LOCK_TIMEOUT_DEFAULT = 30;
     public static final String BKDL_LOCK_REACQUIRE_TIMEOUT = "lockReacquireTimeoutSeconds";
-    public static final long BKDL_LOCK_REACQUIRE_TIMEOUT_DEFAULT =
-            DistributedLogConstants.LOCK_REACQUIRE_TIMEOUT_DEFAULT;
+    public static final long BKDL_LOCK_REACQUIRE_TIMEOUT_DEFAULT = DistributedLogConstants.LOCK_REACQUIRE_TIMEOUT_DEFAULT;
     public static final String BKDL_LOCK_OP_TIMEOUT = "lockOpTimeoutSeconds";
     public static final long BKDL_LOCK_OP_TIMEOUT_DEFAULT = DistributedLogConstants.LOCK_OP_TIMEOUT_DEFAULT;
 
@@ -315,8 +310,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     // General Settings
     public static final String BKDL_READLAC_OPTION = "readLACLongPoll";
-    public static final int BKDL_READLAC_OPTION_DEFAULT =
-            3; //BKLogPartitionReadHandler.ReadLACOption.READENTRYPIGGYBACK_SEQUENTIAL.value
+    public static final int BKDL_READLAC_OPTION_DEFAULT = 3; //BKLogPartitionReadHandler.ReadLACOption.READENTRYPIGGYBACK_SEQUENTIAL.value
     public static final String BKDL_READLACLONGPOLL_TIMEOUT = "readLACLongPollTimeout";
     public static final int BKDL_READLACLONGPOLL_TIMEOUT_DEFAULT = 1000;
     public static final String BKDL_DESERIALIZE_RECORDSET_ON_READS = "deserializeRecordSetOnReads";
@@ -364,8 +358,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     public static final int BKDL_MAX_PREFETCH_ENTRIES_PER_LOGSEGMENT_DEFAULT = 32;
 
     // Scan Settings
-    public static final String BKDL_FIRST_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN =
-            "firstNumEntriesEachPerLastRecordScan";
+    public static final String BKDL_FIRST_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN = "firstNumEntriesEachPerLastRecordScan";
     public static final int BKDL_FIRST_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN_DEFAULT = 2;
     public static final String BKDL_MAX_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN = "maxNumEntriesPerReadLastRecordScan";
     public static final int BKDL_MAX_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN_DEFAULT = 16;
@@ -383,17 +376,15 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     public static final String BKDL_TRACE_READAHEAD_DELIVERY_LATENCY = "traceReadAheadDeliveryLatency";
     public static final boolean BKDL_TRACE_READAHEAD_DELIVERY_LATENCY_DEFAULT = false;
     public static final String BKDL_METADATA_LATENCY_WARN_THRESHOLD_MS = "metadataLatencyWarnThresholdMs";
-    public static final long BKDL_METADATA_LATENCY_WARN_THRESHOLD_MS_DEFAULT =
-            DistributedLogConstants.LATENCY_WARN_THRESHOLD_IN_MILLIS;
+    public static final long BKDL_METADATA_LATENCY_WARN_THRESHOLD_MS_DEFAULT = DistributedLogConstants.LATENCY_WARN_THRESHOLD_IN_MILLIS;
     public static final String BKDL_DATA_LATENCY_WARN_THRESHOLD_MS = "dataLatencyWarnThresholdMs";
-    public static final long BKDL_DATA_LATENCY_WARN_THRESHOLD_MS_DEFAULT =
-            2 * DistributedLogConstants.LATENCY_WARN_THRESHOLD_IN_MILLIS;
+    public static final long BKDL_DATA_LATENCY_WARN_THRESHOLD_MS_DEFAULT = 2 * DistributedLogConstants.LATENCY_WARN_THRESHOLD_IN_MILLIS;
     public static final String BKDL_TRACE_READAHEAD_METADATA_CHANGES = "traceReadAheadMetadataChanges";
     public static final boolean BKDL_TRACE_READAHEAD_MEATDATA_CHANGES_DEFAULT = false;
-    public static final  String BKDL_ENABLE_TASK_EXECUTION_STATS = "enableTaskExecutionStats";
-    public static final  boolean BKDL_ENABLE_TASK_EXECUTION_STATS_DEFAULT = false;
-    public static final  String BKDL_TASK_EXECUTION_WARN_TIME_MICROS = "taskExecutionWarnTimeMicros";
-    public static final  long BKDL_TASK_EXECUTION_WARN_TIME_MICROS_DEFAULT = 100000;
+    public final static String BKDL_ENABLE_TASK_EXECUTION_STATS = "enableTaskExecutionStats";
+    public final static boolean BKDL_ENABLE_TASK_EXECUTION_STATS_DEFAULT = false;
+    public final static String BKDL_TASK_EXECUTION_WARN_TIME_MICROS = "taskExecutionWarnTimeMicros";
+    public final static long BKDL_TASK_EXECUTION_WARN_TIME_MICROS_DEFAULT = 100000;
     public static final String BKDL_ENABLE_PERSTREAM_STAT = "enablePerStreamStat";
     public static final boolean BKDL_ENABLE_PERSTREAM_STAT_DEFAULT = false;
 
@@ -428,8 +419,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     public static final String BKDL_DYNAMIC_CONFIG_RELOAD_INTERVAL_SEC = "dynamicConfigReloadIntervalSec";
     public static final int BKDL_DYNAMIC_CONFIG_RELOAD_INTERVAL_SEC_DEFAULT = 60;
     public static final String BKDL_STREAM_CONFIG_ROUTER_CLASS = "streamConfigRouterClass";
-    public static final String BKDL_STREAM_CONFIG_ROUTER_CLASS_DEFAULT =
-            "org.apache.distributedlog.service.config.IdentityConfigRouter";
+    public static final String BKDL_STREAM_CONFIG_ROUTER_CLASS_DEFAULT = "org.apache.distributedlog.service.config.IdentityConfigRouter";
 
     // Settings for RateLimit (used by distributedlog-service)
 
@@ -505,7 +495,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * You can load configurations in precedence order. The first one takes.
+     * You can load configurations in precedence order. The first one takes
      * precedence over any loaded later.
      *
      * @param confURL Configuration URL
@@ -516,7 +506,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * You can load configuration from other configuration.
+     * You can load configuration from other configuration
      *
      * @param baseConf Other Configuration
      */
@@ -525,7 +515,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Load configuration from other configuration object.
+     * Load configuration from other configuration object
      *
      * @param otherConf Other configuration object
      */
@@ -534,25 +524,11 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Load whitelisted stream configuration from another configuration object.
+     * Load whitelisted stream configuration from another configuration object
      *
      * @param streamConfiguration stream configuration overrides
-     * @Deprecated since 0.5.0, in favor of using {@link #loadStreamConf(java.util.Optional)}
      */
     public void loadStreamConf(Optional<DistributedLogConfiguration> streamConfiguration) {
-        if (streamConfiguration.isPresent()) {
-            loadStreamConf(java.util.Optional.of(streamConfiguration.get()));
-        } else {
-            loadStreamConf(java.util.Optional.empty());
-        }
-    }
-
-    /**
-     * Load whitelisted stream configuration from another configuration object.
-     *
-     * @param streamConfiguration stream configuration overrides
-     */
-    public void loadStreamConf(java.util.Optional<DistributedLogConfiguration> streamConfiguration) {
         if (!streamConfiguration.isPresent()) {
             return;
         }
@@ -590,7 +566,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
                 if (appendNewline) {
                     builder.append("\n");
                 }
-                Object value = getProperty((String) key);
+                Object value = getProperty((String)key);
                 builder.append(key).append("=").append(value);
                 appendNewline = true;
             }
@@ -621,8 +597,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get ZK Session timeout in seconds.
-     *
-     * <p>This is the session timeout applied for zookeeper client used by distributedlog.
+     * <p>
+     * This is the session timeout applied for zookeeper client used by distributedlog.
      * Use {@link #getBKClientZKSessionTimeoutMilliSeconds()} for zookeeper client used
      * by bookkeeper client.
      *
@@ -635,8 +611,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get ZK Session timeout in milliseconds.
-     *
-     * <p>This is the session timeout applied for zookeeper client used by distributedlog.
+     * <p>
+     * This is the session timeout applied for zookeeper client used by distributedlog.
      * Use {@link #getBKClientZKSessionTimeoutMilliSeconds()} for zookeeper client used
      * by bookkeeper client.
      *
@@ -660,7 +636,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get zookeeper access rate limit.
-     *
      * <p>The rate limiter is basically a guava {@link com.google.common.util.concurrent.RateLimiter}.
      * It is rate limiting the requests that sent by zookeeper client. If the value is non-positive,
      * the rate limiting is disable. By default it is disable (value = 0).
@@ -686,7 +661,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get num of retries per request for zookeeper client.
-     *
      * <p>Retries only happen on retryable failures like session expired,
      * session moved. for permanent failures, the request will fail immediately.
      * The default value is 3.
@@ -711,7 +685,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get the start backoff time of zookeeper operation retries, in milliseconds.
-     *
      * <p>The retry time will increase in bound exponential way, and become flat
      * after hit max backoff time ({@link #getZKRetryBackoffMaxMillis()}).
      * The default start backoff time is 5000 milliseconds.
@@ -739,7 +712,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get the max backoff time of zookeeper operation retries, in milliseconds.
-     *
      * <p>The retry time will increase in bound exponential way starting from
      * {@link #getZKRetryBackoffStartMillis()}, and become flat after hit this max
      * backoff time.
@@ -795,8 +767,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get BK's zookeeper session timout in milliseconds.
-     *
-     * <p>This is the session timeout applied for zookeeper client used by bookkeeper client.
+     * <p>
+     * This is the session timeout applied for zookeeper client used by bookkeeper client.
      * Use {@link #getZKSessionTimeoutMilliseconds()} for zookeeper client used
      * by distributedlog.
      *
@@ -820,7 +792,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get zookeeper access rate limit for zookeeper client used in bookkeeper client.
-     *
      * <p>The rate limiter is basically a guava {@link com.google.common.util.concurrent.RateLimiter}.
      * It is rate limiting the requests that sent by zookeeper client. If the value is non-positive,
      * the rate limiting is disable. By default it is disable (value = 0).
@@ -848,7 +819,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get num of retries for zookeeper client that used by bookkeeper client.
-     *
      * <p>Retries only happen on retryable failures like session expired,
      * session moved. for permanent failures, the request will fail immediately.
      * The default value is 3. Setting it to zero or negative will retry infinitely.
@@ -865,7 +835,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get the start backoff time of zookeeper operation retries, in milliseconds.
-     *
      * <p>The retry time will increase in bound exponential way, and become flat
      * after hit max backoff time ({@link #getBKClientZKRetryBackoffMaxMillis()}.
      * The default start backoff time is 5000 milliseconds.
@@ -880,7 +849,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get the max backoff time of zookeeper operation retries, in milliseconds.
-     *
      * <p>The retry time will increase in bound exponential way starting from
      * {@link #getBKClientZKRetryBackoffStartMillis()}, and become flat after
      * hit this max backoff time.
@@ -901,14 +869,14 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     /**
      * Get ensemble size of each log segment (ledger) will use.
      * By default it is 3.
-     *
-     * <p>A log segment's data is stored in an ensemble of bookies in
+     * <p>
+     * A log segment's data is stored in an ensemble of bookies in
      * a stripping way. Each entry will be added in a <code>write-quorum</code>
      * size of bookies. The add operation will complete once it receives
      * responses from a <code>ack-quorum</code> size of bookies. The stripping
      * is done in a round-robin way in bookkeeper.
-     *
-     * <p>For example, we configure the ensemble-size to 5, write-quorum-size to 3,
+     * <p>
+     * For example, we configure the ensemble-size to 5, write-quorum-size to 3,
      * and ack-quorum-size to 2. The data will be stored in following stripping way.
      * <pre>
      * | entry id | bk1 | bk2 | bk3 | bk4 | bk5 |
@@ -919,8 +887,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
      * |     4    |  x  |  x  |     |     |  x  |
      * |     5    |  x  |  x  |  x  |     |     |
      * </pre>
-     *
-     * <p>We don't recommend stripping within a log segment to increase bandwidth.
+     * <p>
+     * We don't recommend stripping within a log segment to increase bandwidth.
      * We'd recommend to strip by `partition` in higher level of distributedlog
      * to increase performance. so typically the ensemble size will set to be
      * the same value as write quorum size.
@@ -1016,7 +984,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get if row aware ensemble placement is enabled.
-     *
      * <p>If enabled, {@link DNSResolverForRows} will be used for dns resolution
      * rather than {@link DNSResolverForRacks}, if no other dns resolver set via
      * {@link #setEnsemblePlacementDnsResolverClass(Class)}.
@@ -1046,7 +1013,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get the DNS resolver class for bookkeeper ensemble placement.
-     *
      * <p>By default, {@link DNSResolverForRacks} will be used if
      * {@link #getRowAwareEnsemblePlacementEnabled()} is disabled and
      * {@link DNSResolverForRows} will be used if {@link #getRowAwareEnsemblePlacementEnabled()}
@@ -1084,7 +1050,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get mapping used to override the region mapping derived by the default resolver.
-     *
      * <p>It is a string of pairs of host-region mappings (host:region) separated by semicolon.
      * By default it is empty string.
      *
@@ -1099,7 +1064,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Set mapping used to override the region mapping derived by the default resolver
-     *
      * <p>It is a string of pairs of host-region mappings (host:region) separated by semicolon.
      * By default it is empty string.
      *
@@ -1119,8 +1083,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Set password used by bookkeeper client for digestion.
-     *
-     * <p>NOTE: not recommend to change. will be derepcated in future.
+     * <p>
+     * NOTE: not recommend to change. will be derepcated in future.
      *
      * @param bkDigestPW BK password digest
      * @return distributedlog configuration
@@ -1132,8 +1096,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get password used by bookkeeper client for digestion.
-     *
-     * <p>NOTE: not recommend to change. will be deprecated in future.
+     * <p>
+     * NOTE: not recommend to change. will be deprecated in future.
      *
      * @return password used by bookkeeper client for digestion
      * @see #setBKDigestPW(String)
@@ -1220,8 +1184,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get BK client read timeout in seconds.
-     *
-     * <p>Please use {@link ClientConfiguration#getReadEntryTimeout()}
+     * <p>
+     * Please use {@link ClientConfiguration#getReadEntryTimeout()}
      * instead of this setting.
      *
      * @return read timeout in seconds
@@ -1248,8 +1212,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get BK client write timeout in seconds.
-     *
-     *  <p>Please use {@link ClientConfiguration#getAddEntryTimeout()}
+     * <p>
+     * Please use {@link ClientConfiguration#getAddEntryTimeout()}
      * instead of this setting.
      *
      * @return write timeout in seconds.
@@ -1261,7 +1225,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Set BK client write timeout in seconds.
+     * Set BK client write timeout in seconds
      *
      * @param writeTimeout write timeout in seconds.
      * @return distributed log configuration
@@ -1275,8 +1239,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get BK client number of worker threads.
-     *
-     * <p>Please use {@link ClientConfiguration#getNumWorkerThreads()}
+     * <p>
+     * Please use {@link ClientConfiguration#getNumWorkerThreads()}
      * instead of this setting.
      *
      * @return number of bookkeeper client worker threads.
@@ -1330,7 +1294,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get the number of dedicated readahead worker threads used by distributedlog namespace.
-     *
      * <p>If this value is non-positive, it would share the normal executor (see {@link #getNumWorkerThreads()}
      * for readahead. otherwise, it would use a dedicated executor for readhead. By default,
      * it is 0.
@@ -1385,8 +1348,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
      * By default it is 0 - the thread will be created dynamically by a executor service.
      * The executor service is an unbounded pool. Application can use `total_tasks - completed_tasks`
      * on monitoring the number of threads that are used for releasing resources.
-     *
-     * <p>The setting is only applied for v2 implementation.
+     * <p>
+     * The setting is only applied for v2 implementation.
      *
      * @return number of resource release threads used by distributedlog namespace.
      */
@@ -1479,8 +1442,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
      */
     public DistributedLogConfiguration setDLLedgerMetadataLayoutVersion(int layoutVersion)
             throws IllegalArgumentException {
-        if ((layoutVersion <= 0)
-                || (layoutVersion > LogSegmentMetadata.LEDGER_METADATA_CURRENT_LAYOUT_VERSION)) {
+        if ((layoutVersion <= 0) ||
+            (layoutVersion > LogSegmentMetadata.LEDGER_METADATA_CURRENT_LAYOUT_VERSION)) {
             // Incorrect version specified
             throw new IllegalArgumentException("Incorrect value for ledger metadata layout version");
         }
@@ -1502,7 +1465,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Set if we should skip the enforcement of min ledger metadata version.
-     *
      * <p>NOTE: please be aware the side effects of skipping min ledger metadata
      * version checking.
      *
@@ -1510,8 +1472,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
      * @return distributed log configuration
      * @see #getDLLedgerMetadataSkipMinVersionCheck()
      */
-    public DistributedLogConfiguration setDLLedgerMetadataSkipMinVersionCheck(boolean skipMinVersionCheck)
-            throws IllegalArgumentException {
+    public DistributedLogConfiguration setDLLedgerMetadataSkipMinVersionCheck(boolean skipMinVersionCheck) throws IllegalArgumentException {
         setProperty(BKDL_LEDGER_METADATA_SKIP_MIN_VERSION_CHECK, skipMinVersionCheck);
         return this;
     }
@@ -1520,7 +1481,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
      * Get the value at which ledger sequence number should start for streams that are being
      * upgraded and did not have ledger sequence number to start with or for newly created
      * streams. By default, it is 1.
-     *
      * <p>In most of the cases this value should not be changed. It is useful for backfilling
      * in the case of migrating log segments whose metadata don't have log segment sequence number.
      *
@@ -1534,7 +1494,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Set the value at which ledger sequence number should start for streams that are being
-     *upgraded and did not have ledger sequence number to start with or for newly created streams.
+     * upgraded and did not have ledger sequence number to start with or for newly created
+     * streams
      *
      * @param firstLogSegmentSequenceNumber first ledger sequence number
      * @return distributed log configuration
@@ -1572,7 +1533,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Whether we should publish record counts in the log records and metadata.
-     *
      * <p>By default it is true. This is a legacy setting for log segment version 1. It
      * should be considered removed.
      *
@@ -1596,7 +1556,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Whether sanity check txn id on starting log segments.
-     *
      * <p>If it is enabled, DL writer would throw
      * {@link org.apache.distributedlog.exceptions.TransactionIdOutOfOrderException}
      * when it received a smaller transaction id than current maximum transaction id.
@@ -1624,7 +1583,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Whether encode region id in log segment metadata.
-     *
      * <p>In global DL use case, encoding region id in log segment medata would
      * help understanding what region that a log segment is created. The region
      * id field in log segment metadata would help for moniotring and troubleshooting.
@@ -1650,8 +1608,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get log segment name version.
-     *
-     * <p><ul>
+     * <p>
+     * <ul>
      * <li>version 0: inprogress_(start_txid) |
      * logrecs_(start_txid)_(end_txid)</li>
      * <li>version 1: inprogress_(logsegment_sequence_number) |
@@ -1680,7 +1638,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get name of the unpartitioned stream.
-     *
      * <p>It is a legacy setting. consider removing it in future.
      *
      * @return unpartitioned stream
@@ -1690,7 +1647,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Set name of the unpartitioned stream.
+     * Set name of the unpartitioned stream
      *
      * @param streamName name of the unpartitioned stream
      * @return distributedlog configuration
@@ -1793,7 +1750,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get Log Flush timeout in seconds.
-     *
      * <p>This is a setting used by DL writer on flushing data. It is typically used
      * by synchronous writer and log segment writer. By default it is 30 seconds.
      *
@@ -1834,14 +1790,13 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
      * @see #getCompressionType()
      */
     public DistributedLogConfiguration setCompressionType(String compressionType) {
-        checkArgument(null != compressionType && !compressionType.isEmpty());
+        Preconditions.checkArgument(null != compressionType && !compressionType.isEmpty());
         setProperty(BKDL_COMPRESSION_TYPE, compressionType);
         return this;
     }
 
     /**
      * Whether to fail immediately if the stream is not ready rather than queueing the request.
-     *
      * <p>If it is enabled, it would fail the write request immediately if the stream isn't ready.
      * Consider turning it on for the use cases that could retry writing to other streams
      * (aka non-strict ordering guarantee). It would result fast failure hence the client would
@@ -1897,7 +1852,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Check whether the durable write is enabled.
-     *
      * <p>It is enabled by default.
      *
      * @return true if durable write is enabled. otherwise, false.
@@ -1924,12 +1878,10 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get output buffer size for DL writers, in bytes.
-     *
      * <p>Large buffer will result in higher compression ratio and
      * it would use the bandwidth more efficiently and improve throughput.
      * Set it to 0 would ask DL writers to transmit the data immediately,
      * which it could achieve low latency.
-     *
      * <p>The default value is 1KB.
      *
      * @return buffer size in byes.
@@ -1953,7 +1905,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get Periodic Log Flush Frequency in milliseconds.
-     *
      * <p>If the setting is set with a positive value, the data in output buffer
      * will be flushed in this provided interval. The default value is 0.
      *
@@ -1979,7 +1930,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Is immediate flush enabled.
-     *
      * <p>If it is enabled, it would flush control record immediately after adding
      * data completed. The default value is false.
      *
@@ -1990,7 +1940,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Enable/Disable immediate flush.
+     * Enable/Disable immediate flush
      *
      * @param enabled
      *          flag to enable/disable immediate flush.
@@ -2004,7 +1954,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get minimum delay between immediate flushes in milliseconds.
-     *
      * <p>This setting only takes effects when {@link #getImmediateFlushEnabled()}
      * is enabled. It torelants the bursty of traffic when immediate flush is enabled,
      * which prevents sending too many control records to the bookkeeper.
@@ -2013,12 +1962,11 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
      * @see #getImmediateFlushEnabled()
      */
     public int getMinDelayBetweenImmediateFlushMs() {
-        return this.getInt(BKDL_MINIMUM_DELAY_BETWEEN_IMMEDIATE_FLUSH_MILLISECONDS,
-                BKDL_MINIMUM_DELAY_BETWEEN_IMMEDIATE_FLUSH_MILLISECONDS_DEFAULT);
+        return this.getInt(BKDL_MINIMUM_DELAY_BETWEEN_IMMEDIATE_FLUSH_MILLISECONDS, BKDL_MINIMUM_DELAY_BETWEEN_IMMEDIATE_FLUSH_MILLISECONDS_DEFAULT);
     }
 
     /**
-     * Set minimum delay between immediate flushes in milliseconds.
+     * Set minimum delay between immediate flushes in milliseconds
      *
      * @param minDelayMs minimum delay between immediate flushes in milliseconds.
      * @return distributed log configuration
@@ -2031,7 +1979,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get Periodic Keep Alive Frequency in milliseconds.
-     *
      * <p>If the setting is set with a positive value, it would periodically write a control record
      * to keep the stream active. The default value is 0.
      *
@@ -2082,11 +2029,9 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Is truncation managed explicitly by the application.
-     *
      * <p>If this is set then time based retention is only a hint to perform
      * deferred cleanup. However we never remove a segment that has not been
      * already marked truncated.
-     *
      * <p>It is disabled by default.
      *
      * @return whether truncation managed explicitly by the application
@@ -2115,10 +2060,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get log segment rolling interval in minutes.
-     *
      * <p>If the setting is set to a positive value, DL writer will roll log segments
      * based on time. Otherwise, it will roll log segments based on size.
-     *
      * <p>The default value is 2 hours.
      *
      * @return log segment rolling interval in minutes
@@ -2144,11 +2087,9 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get Max LogSegment Size in Bytes.
-     *
      * <p>This setting only takes effects when time based rolling is disabled.
      * DL writer will roll into a new log segment only after current one reaches
      * this threshold.
-     *
      * <p>The default value is 256MB.
      *
      * @return max logsegment size in bytes.
@@ -2177,7 +2118,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get log segment rolling concurrency.
-     *
      * <p>It limits how many writers could roll log segments concurrently.
      * The default value is 1.
      *
@@ -2209,8 +2149,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Is lock enabled when opening a writer to write a stream?
-     *
-     * <p>We don't generally require a lock to write a stream to guarantee correctness. The lock
+     * <p> We don't generally require a lock to write a stream to guarantee correctness. The lock
      * is more on tracking ownerships. The built-in fencing mechanism is used guarantee correctness
      * during stream owner failover. It is okay to disable lock if your application knows which nodes
      * have to write which streams.
@@ -2334,7 +2273,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Set the root path of ledger allocator pool.
+     * Set the root path of ledger allocator pool
      *
      * @param path
      *          path of ledger allocator pool.
@@ -2396,7 +2335,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get the per stream outstanding write limit for dl.
-     *
      * <p>If the setting is set with a positive value, the per stream
      * write limiting is enabled. By default it is disabled.
      *
@@ -2423,7 +2361,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get the global write limit for dl.
-     *
      * <p>If the setting is set with a positive value, the global
      * write limiting is enabled. By default it is disabled.
      *
@@ -2449,10 +2386,8 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Whether to darkmode outstanding writes limit.
-     *
      * <p>If it is running in darkmode, it would not reject requests when
      * it is over limit, but just record them in the stats.
-     *
      * <p>By default, it is in darkmode.
      *
      * @return flag to darmkode pending write limit.
@@ -2528,8 +2463,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     //
 
     /**
-     * Get the time in milliseconds as the threshold for when an idle reader should dump warnings.
-     *
+     * Get the time in milliseconds as the threshold for when an idle reader should dump warnings
      * <p>The default value is 2 minutes.
      *
      * @return reader idle warn threshold in millis.
@@ -2541,7 +2475,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Set the time in milliseconds as the threshold for when an idle reader should dump warnings.
+     * Set the time in milliseconds as the threshold for when an idle reader should dump warnings
      *
      * @param warnThreshold time after which we should dump the read ahead state
      * @return distributed log configuration
@@ -2553,8 +2487,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Get the time in milliseconds as the threshold for when an idle reader should throw errors.
-     *
+     * Get the time in milliseconds as the threshold for when an idle reader should throw errors
      * <p>The default value is <i>Integer.MAX_VALUE</i>.
      *
      * @return reader idle error threshold in millis
@@ -2566,7 +2499,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Set the time in milliseconds as the threshold for when an idle reader should throw errors.
+     * Set the time in milliseconds as the threshold for when an idle reader should throw errors
      *
      * @param warnThreshold time after which we should throw idle reader errors
      * @return distributed log configuration
@@ -2582,7 +2515,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     //
 
     /**
-     * Get if we should ignore truncation status when reading the records.
+     * Get if we should ignore truncation status when reading the records
      *
      * @return if we should ignore truncation status
      */
@@ -2591,7 +2524,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Set if we should ignore truncation status when reading the records.
+     * Set if we should ignore truncation status when reading the records
      *
      * @param ignoreTruncationStatus
      *          if we should ignore truncation status
@@ -2602,7 +2535,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Get if we should alert when reader is positioned on a truncated segment.
+     * Get if we should alert when reader is positioned on a truncated segment
      *
      * @return if we should alert when reader is positioned on a truncated segment
      */
@@ -2611,7 +2544,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Set if we should alert when reader is positioned on a truncated segment.
+     * Set if we should alert when reader is positioned on a truncated segment
      *
      * @param alertWhenPositioningOnTruncated
      *          if we should alert when reader is positioned on a truncated segment
@@ -2627,9 +2560,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
      * @return whether position gap detection for reader enabled.
      */
     public boolean getPositionGapDetectionEnabled() {
-        return
-                getBoolean(BKDL_READER_POSITION_GAP_DETECTION_ENABLED,
-                        BKDL_READER_POSITION_GAP_DETECTION_ENABLED_DEFAULT);
+        return getBoolean(BKDL_READER_POSITION_GAP_DETECTION_ENABLED, BKDL_READER_POSITION_GAP_DETECTION_ENABLED_DEFAULT);
     }
 
     /**
@@ -2662,7 +2593,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Get if we should enable read ahead.
+     * Get if we should enable read ahead
      *
      * @return if read ahead is enabled
      */
@@ -2671,7 +2602,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Set if we should enable force read.
+     * Set if we should enable force read
      *
      * @param enableForceRead
      *          Enable force read
@@ -2682,7 +2613,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Get if we should enable force read.
+     * Get if we should enable force read
      *
      * @return if should use separate ZK Clients
      */
@@ -2692,7 +2623,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get the max records cached by readahead cache.
-     *
      * <p>The default value is 10. Increase this value to improve throughput,
      * but be careful about the memory.
      *
@@ -2718,7 +2648,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get number of entries read as a batch by readahead worker.
-     *
      * <p>The default value is 2. Increase the value to increase the concurrency
      * of reading entries from bookkeeper.
      *
@@ -2755,7 +2684,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Set the wait time between successive attempts to poll for new log records, in milliseconds.
+     * Set the wait time between successive attempts to poll for new log records, in milliseconds
      *
      * @param readAheadWaitTime read ahead wait time
      * @return distributed log configuration
@@ -2769,7 +2698,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     /**
      * Get the wait time if it reaches end of stream and
      * <b>there isn't any inprogress logsegment in the stream</b>, in millis.
-     *
      * <p>The default value is 10 seconds.
      *
      * @see #setReadAheadWaitTimeOnEndOfStream(int)
@@ -2801,7 +2729,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
      * If readahead keeps receiving {@link org.apache.bookkeeper.client.BKException.BKNoSuchLedgerExistsException} on
      * reading last add confirmed in given period, it would stop polling last add confirmed and re-initialize the ledger
      * handle and retry. The threshold is specified in milliseconds.
-     *
      * <p>The default value is 10 seconds.
      *
      * @return error threshold in milliseconds, that readahead will reinitialize ledger handle after keeping receiving
@@ -2813,8 +2740,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Set the error threshold that readahead will reinitialize ledger handle
-     * after keeping receiving no such ledger exceptions.
+     * Set the error threshold that readahead will reinitialize ledger handle after keeping receiving no such ledger exceptions.
      *
      * @see #getReadAheadNoSuchLedgerExceptionOnReadLACErrorThresholdMillis()
      * @param thresholdMillis
@@ -2822,8 +2748,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
      *          no such ledger exceptions.
      * @return distributedlog configuration
      */
-    public DistributedLogConfiguration
-    setReadAheadNoSuchLedgerExceptionOnReadLACErrorThresholdMillis(long thresholdMillis) {
+    public DistributedLogConfiguration setReadAheadNoSuchLedgerExceptionOnReadLACErrorThresholdMillis(long thresholdMillis) {
         setProperty(BKDL_READAHEAD_NOSUCHLEDGER_EXCEPTION_ON_READLAC_ERROR_THRESHOLD_MILLIS, thresholdMillis);
         return this;
     }
@@ -2900,8 +2825,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
      * @return number of entries to scan for first scan of reading last record.
      */
     public int getFirstNumEntriesPerReadLastRecordScan() {
-        return getInt(BKDL_FIRST_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN,
-                BKDL_FIRST_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN_DEFAULT);
+        return getInt(BKDL_FIRST_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN, BKDL_FIRST_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN_DEFAULT);
     }
 
     /**
@@ -2922,8 +2846,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
      * @return max number of entries for each scan to read last record.
      */
     public int getMaxNumEntriesPerReadLastRecordScan() {
-        return getInt(BKDL_MAX_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN,
-                BKDL_MAX_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN_DEFAULT);
+        return getInt(BKDL_MAX_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN, BKDL_MAX_NUM_ENTRIES_PER_READ_LAST_RECORD_SCAN_DEFAULT);
     }
 
     /**
@@ -3265,6 +3188,7 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     /**
      * Whether check the existence of a log if querying local cache of a federated namespace missed.
      * Enabling it will issue zookeeper queries to check all sub namespaces under a federated namespace.
+     *
      * NOTE: by default it is on for all admin related tools. for write proxies, consider turning off for
      * performance.
      *
@@ -3378,7 +3302,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get the maximum number of partitions of each stream allowed to be acquired per proxy.
-     *
      * <p>This setting is able to configure per stream. This is the default setting if it is
      * not configured per stream. Default value is -1, which means no limit on the number of
      * partitions could be acquired each stream.
@@ -3404,7 +3327,6 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
 
     /**
      * Get the maximum number of partitions of each stream allowed to cache per proxy.
-     *
      * <p>This setting is able to configure per stream. This is the default setting if it is
      * not configured per stream. Default value is -1, which means no limit on the number of
      * partitions could be acquired each stream.
@@ -3588,15 +3510,15 @@ public class DistributedLogConfiguration extends CompositeConfiguration {
     }
 
     /**
-     * Validate the configuration.
+     * Validate the configuration
      */
     public void validate() {
-        checkArgument(getBKClientReadTimeout() * 1000 >= getReadLACLongPollTimeout(),
-            "Invalid timeout configuration: bkcReadTimeoutSeconds (" + getBKClientReadTimeout()
-                    + ") should be longer than readLACLongPollTimeout (" + getReadLACLongPollTimeout() + ")");
+        Preconditions.checkArgument(getBKClientReadTimeout() * 1000 >= getReadLACLongPollTimeout(),
+            "Invalid timeout configuration: bkcReadTimeoutSeconds ("+getBKClientReadTimeout()+
+                ") should be longer than readLACLongPollTimeout ("+getReadLACLongPollTimeout()+")");
         long readerIdleWarnThresholdMs = getReaderIdleWarnThresholdMillis();
         if (readerIdleWarnThresholdMs > 0) { // NOTE: some test cases set the idle warn threshold to 0
-            checkArgument(readerIdleWarnThresholdMs > 2 * getReadLACLongPollTimeout(),
+            Preconditions.checkArgument(readerIdleWarnThresholdMs > 2 * getReadLACLongPollTimeout(),
                     "Invalid configuration: ReaderIdleWarnThreshold should be 2x larget than readLACLongPollTimeout");
         }
     }

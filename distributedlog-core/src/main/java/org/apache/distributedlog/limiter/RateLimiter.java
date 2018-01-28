@@ -22,23 +22,21 @@ package org.apache.distributedlog.limiter;
  */
 public interface RateLimiter {
 
-    RateLimiter REJECT = new RateLimiter() {
+    public static final RateLimiter REJECT = new RateLimiter() {
         @Override
         public boolean acquire(int permits) {
             return false;
         }
     };
 
-    RateLimiter ACCEPT = new RateLimiter() {
+    public static final RateLimiter ACCEPT = new RateLimiter() {
         @Override
         public boolean acquire(int permits) {
             return true;
         }
     };
-    /**
-     * Builder for a rate limiter.
-     */
-    abstract class Builder {
+
+    public static abstract class Builder {
         public abstract RateLimiter build();
     }
 

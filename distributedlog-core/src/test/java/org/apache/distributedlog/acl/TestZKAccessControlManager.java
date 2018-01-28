@@ -17,10 +17,6 @@
  */
 package org.apache.distributedlog.acl;
 
-import static org.junit.Assert.*;
-import java.net.URI;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import org.apache.distributedlog.DistributedLogConfiguration;
 import org.apache.distributedlog.TestZooKeeperClientBuilder;
 import org.apache.distributedlog.ZooKeeperClient;
@@ -36,13 +32,15 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 
-/**
- * TestZKAccessControlManager.
- */
+import static org.junit.Assert.*;
+
 public class TestZKAccessControlManager extends ZooKeeperClusterTestCase {
 
-    private static final Logger logger = LoggerFactory.getLogger(TestZKAccessControlManager.class);
+    static final Logger logger = LoggerFactory.getLogger(TestZKAccessControlManager.class);
 
     private DistributedLogConfiguration conf;
     private ZooKeeperClient zkc;

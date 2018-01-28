@@ -17,36 +17,27 @@
  */
 package org.apache.distributedlog.api;
 
-import java.io.Closeable;
-import java.io.IOException;
-import org.apache.bookkeeper.common.annotation.InterfaceAudience.LimitedPrivate;
-import org.apache.bookkeeper.common.annotation.InterfaceStability.Evolving;
 import org.apache.distributedlog.io.AsyncCloseable;
 
-/**
- * Provide a metadata accessor to access customized metadata associated with logs.
- *
- * @deprecated this class is here for legacy reason. It is not recommended to use this class for storing customized
- *             metadata.
- */
-@LimitedPrivate
-@Evolving
+import java.io.Closeable;
+import java.io.IOException;
+
 public interface MetadataAccessor extends Closeable, AsyncCloseable {
     /**
-     * Get the name of the stream managed by this log manager.
+     * Get the name of the stream managed by this log manager
      * @return streamName
      */
-    String getStreamName();
+    public String getStreamName();
 
-    void createOrUpdateMetadata(byte[] metadata) throws IOException;
+    public void createOrUpdateMetadata(byte[] metadata) throws IOException;
 
-    void deleteMetadata() throws IOException;
+    public void deleteMetadata() throws IOException;
 
-    byte[] getMetadata() throws IOException;
+    public byte[] getMetadata() throws IOException;
 
     /**
      * Close the distributed log metadata, freeing any resources it may hold.
      */
-    void close() throws IOException;
+    public void close() throws IOException;
 
 }

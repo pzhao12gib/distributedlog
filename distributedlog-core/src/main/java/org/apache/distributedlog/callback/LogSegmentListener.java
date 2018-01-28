@@ -17,13 +17,12 @@
  */
 package org.apache.distributedlog.callback;
 
-import java.util.List;
-
 import org.apache.distributedlog.LogSegmentMetadata;
 
+import java.util.List;
 
 /**
- * Listener on log segments changes for a given stream used by {@link org.apache.distributedlog.BKLogReadHandler}.
+ * Listener on log segments changes for a given stream used by {@link org.apache.distributedlog.BKLogReadHandler}
  */
 public interface LogSegmentListener {
 

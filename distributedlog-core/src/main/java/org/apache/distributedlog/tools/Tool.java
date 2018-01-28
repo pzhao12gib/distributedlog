@@ -17,8 +17,6 @@
  */
 package org.apache.distributedlog.tools;
 
-import java.util.Map;
-import java.util.TreeMap;
 import org.apache.bookkeeper.util.ReflectionUtils;
 import org.apache.commons.cli.BasicParser;
 import org.apache.commons.cli.CommandLine;
@@ -26,10 +24,11 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 
-
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
- * A Tool Framework.
+ * A Tool Framework
  */
 public abstract class Tool {
 
@@ -107,9 +106,7 @@ public abstract class Tool {
             helpFormatter.printHelp(getUsage(), getOptions());
         }
     }
-    /**
-     * HelpCommand describing the usage of this tool.
-     */
+
     public class HelpCommand implements Command {
 
         @Override

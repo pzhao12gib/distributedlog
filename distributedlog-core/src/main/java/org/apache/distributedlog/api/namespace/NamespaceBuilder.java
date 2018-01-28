@@ -17,21 +17,10 @@
  */
 package org.apache.distributedlog.api.namespace;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-import java.io.IOException;
-import java.net.URI;
-
-import org.apache.bookkeeper.common.annotation.InterfaceAudience.Public;
-import org.apache.bookkeeper.common.annotation.InterfaceStability.Stable;
-import org.apache.bookkeeper.feature.Feature;
-import org.apache.bookkeeper.feature.FeatureProvider;
-import org.apache.bookkeeper.feature.SettableFeatureProvider;
-import org.apache.bookkeeper.stats.NullStatsLogger;
-import org.apache.bookkeeper.stats.StatsLogger;
+import com.google.common.base.Preconditions;
 import org.apache.distributedlog.BKDistributedLogNamespace;
 import org.apache.distributedlog.DistributedLogConfiguration;
 import org.apache.distributedlog.DistributedLogConstants;
-import org.apache.distributedlog.common.util.PermitLimiter;
 import org.apache.distributedlog.config.DynamicDistributedLogConfiguration;
 import org.apache.distributedlog.feature.CoreFeatureKeys;
 import org.apache.distributedlog.injector.AsyncFailureInjector;
@@ -41,10 +30,18 @@ import org.apache.distributedlog.namespace.NamespaceDriverManager;
 import org.apache.distributedlog.util.ConfUtils;
 import org.apache.distributedlog.util.DLUtils;
 import org.apache.distributedlog.util.OrderedScheduler;
+import org.apache.distributedlog.common.util.PermitLimiter;
 import org.apache.distributedlog.util.SimplePermitLimiter;
-
+import org.apache.bookkeeper.feature.Feature;
+import org.apache.bookkeeper.feature.FeatureProvider;
+import org.apache.bookkeeper.feature.SettableFeatureProvider;
+import org.apache.bookkeeper.stats.NullStatsLogger;
+import org.apache.bookkeeper.stats.StatsLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.net.URI;
 
 /**
  * Builder to construct a <code>Namespace</code>.
@@ -53,8 +50,6 @@ import org.slf4j.LoggerFactory;
  * @see Namespace
  * @since 0.3.32
  */
-@Public
-@Stable
 public class NamespaceBuilder {
 
     private static final Logger logger = LoggerFactory.getLogger(NamespaceBuilder.class);
@@ -88,7 +83,7 @@ public class NamespaceBuilder {
     }
 
     /**
-     * Dynamic DistributedLog Configuration used for the namespace.
+     * Dynamic DistributedLog Configuration used for the namespace
      *
      * @param dynConf dynamic distributedlog configuration
      * @return namespace builder
@@ -112,7 +107,7 @@ public class NamespaceBuilder {
     }
 
     /**
-     * Stats Logger used for stats collection.
+     * Stats Logger used for stats collection
      *
      * @param statsLogger
      *          stats logger
@@ -148,7 +143,7 @@ public class NamespaceBuilder {
     }
 
     /**
-     * Client Id used for accessing the namespace.
+     * Client Id used for accessing the namespace
      *
      * @param clientId
      *          client id used for accessing the namespace
@@ -177,8 +172,8 @@ public class NamespaceBuilder {
                                                           StatsLogger perLogStatsLogger,
                                                           DistributedLogConfiguration conf) {
         StatsLogger normalizedPerLogStatsLogger = perLogStatsLogger;
-        if (perLogStatsLogger == NullStatsLogger.INSTANCE
-                && conf.getEnablePerStreamStat()) {
+        if (perLogStatsLogger == NullStatsLogger.INSTANCE &&
+                conf.getEnablePerStreamStat()) {
             normalizedPerLogStatsLogger = statsLogger.scope("stream");
         }
         return normalizedPerLogStatsLogger;
@@ -195,8 +190,8 @@ public class NamespaceBuilder {
     public Namespace build()
             throws IllegalArgumentException, NullPointerException, IOException {
         // Check arguments
-        checkNotNull(_conf, "No DistributedLog Configuration.");
-        checkNotNull(_uri, "No DistributedLog URI");
+        Preconditions.checkNotNull(_conf, "No DistributedLog Configuration.");
+        Preconditions.checkNotNull(_uri, "No DistributedLog URI");
 
         // validate the configuration
         _conf.validate();

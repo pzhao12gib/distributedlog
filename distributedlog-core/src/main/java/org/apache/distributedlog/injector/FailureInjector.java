@@ -25,7 +25,7 @@ public interface FailureInjector {
     /**
      * No-op failure injector, which does nothing.
      */
-    FailureInjector NULL = new FailureInjector() {
+    public static FailureInjector NULL = new FailureInjector() {
         @Override
         public void inject() {
             // no-op;

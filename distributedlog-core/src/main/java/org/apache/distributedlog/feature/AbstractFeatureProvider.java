@@ -17,28 +17,25 @@
  */
 package org.apache.distributedlog.feature;
 
-import java.io.IOException;
-import java.lang.reflect.Constructor;
-import java.lang.reflect.InvocationTargetException;
+import org.apache.distributedlog.DistributedLogConfiguration;
 import org.apache.bookkeeper.feature.CacheableFeatureProvider;
-import org.apache.bookkeeper.feature.Feature;
-
 import org.apache.bookkeeper.feature.FeatureProvider;
+import org.apache.bookkeeper.feature.Feature;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.apache.commons.configuration.ConfigurationException;
-import org.apache.distributedlog.DistributedLogConfiguration;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
+import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 
 /**
- * Decider based feature provider.
+ * Decider based feature provider
  */
 public abstract class AbstractFeatureProvider<T extends Feature> extends CacheableFeatureProvider<T> {
 
-    private static final Logger logger = LoggerFactory.getLogger(AbstractFeatureProvider.class);
+    protected static final Logger logger = LoggerFactory.getLogger(AbstractFeatureProvider.class);
 
     public static FeatureProvider getFeatureProvider(String rootScope,
                                                      DistributedLogConfiguration conf,
@@ -71,8 +68,7 @@ public abstract class AbstractFeatureProvider<T extends Feature> extends Cacheab
             if (targetException instanceof IOException) {
                 throw (IOException) targetException;
             } else {
-                throw new IOException("Encountered invocation target"
-                        + " exception while instantiating feature provider : ", e);
+                throw new IOException("Encountered invocation target exception while instantiating feature provider : ", e);
             }
         }
     }

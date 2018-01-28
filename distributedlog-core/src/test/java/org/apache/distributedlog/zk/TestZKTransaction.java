@@ -17,10 +17,6 @@
  */
 package org.apache.distributedlog.zk;
 
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
-import java.util.concurrent.CountDownLatch;
-import javax.annotation.Nullable;
 import org.apache.distributedlog.ZooKeeperClient;
 import org.apache.distributedlog.exceptions.DLIllegalStateException;
 import org.apache.zookeeper.KeeperException;
@@ -28,11 +24,14 @@ import org.apache.zookeeper.Op;
 import org.apache.zookeeper.OpResult;
 import org.junit.Test;
 
+import java.util.concurrent.CountDownLatch;
+import javax.annotation.Nullable;
 
-
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
 /**
- * Test Case for zookeeper transaction.
+ * Test Case for zookeeper transaction
  */
 public class TestZKTransaction {
 

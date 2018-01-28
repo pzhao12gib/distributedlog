@@ -17,16 +17,8 @@
  */
 package org.apache.distributedlog.impl.metadata;
 
-import static com.google.common.base.Charsets.UTF_8;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Objects;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URI;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-
-
 import org.apache.distributedlog.DistributedLogConfiguration;
 import org.apache.distributedlog.DistributedLogConstants;
 import org.apache.distributedlog.ZooKeeperClient;
@@ -40,6 +32,13 @@ import org.apache.thrift.transport.TMemoryInputTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URI;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+
+import static com.google.common.base.Charsets.UTF_8;
 
 /**
  * Configurations for BookKeeper based DL.
@@ -59,8 +58,8 @@ public class BKDLConfig implements DLConfig {
             dlConf.setCreateStreamIfNotExists(false);
             LOG.info("Disabled createIfNotExists for federated namespace.");
         }
-        LOG.info("Propagate BKDLConfig to DLConfig : encodeRegionID = {},"
-                        + " firstLogSegmentSequenceNumber = {}, createStreamIfNotExists = {}, isFederated = {}.",
+        LOG.info("Propagate BKDLConfig to DLConfig : encodeRegionID = {}," +
+                        " firstLogSegmentSequenceNumber = {}, createStreamIfNotExists = {}, isFederated = {}.",
                 new Object[] { dlConf.getEncodeRegionIDInLogSegmentMetadata(),
                         dlConf.getFirstLogSegmentSequenceNumber(), dlConf.getCreateStreamIfNotExists(),
                         bkdlConfig.isFederatedNamespace() });
@@ -76,7 +75,7 @@ public class BKDLConfig implements DLConfig {
             }
         }
         assert (dlConfig instanceof BKDLConfig);
-        return (BKDLConfig) dlConfig;
+        return (BKDLConfig)dlConfig;
     }
 
     @VisibleForTesting
@@ -226,7 +225,7 @@ public class BKDLConfig implements DLConfig {
     /**
      * Set the value at which ledger sequence number should start for streams that are being
      * upgraded and did not have ledger sequence number to start with or for newly created
-     * streams.
+     * streams
      *
      * @param firstLogSegmentSeqNo first ledger sequence number
      * @return bk dl config
@@ -239,7 +238,7 @@ public class BKDLConfig implements DLConfig {
     /**
      * Get the value at which ledger sequence number should start for streams that are being
      * upgraded and did not have ledger sequence number to start with or for newly created
-     * streams.
+     * streams
      *
      * @return first ledger sequence number
      */
@@ -263,7 +262,7 @@ public class BKDLConfig implements DLConfig {
     }
 
     /**
-     * Whether the namespace is federated namespace.
+     * Whether the namespace is federated namespace
      *
      * @return true if the namespace is a federated namespace. otherwise false.
      */
@@ -284,16 +283,16 @@ public class BKDLConfig implements DLConfig {
             return false;
         }
         BKDLConfig another = (BKDLConfig) o;
-        return Objects.equal(bkZkServersForWriter, another.bkZkServersForWriter)
-                && Objects.equal(bkZkServersForReader, another.bkZkServersForReader)
-                && Objects.equal(dlZkServersForWriter, another.dlZkServersForWriter)
-                && Objects.equal(dlZkServersForReader, another.dlZkServersForReader)
-                && Objects.equal(bkLedgersPath, another.bkLedgersPath)
-                && sanityCheckTxnID == another.sanityCheckTxnID
-                && encodeRegionID == another.encodeRegionID
-                && Objects.equal(aclRootPath, another.aclRootPath)
-                && Objects.equal(firstLogSegmentSeqNo, another.firstLogSegmentSeqNo)
-                && Objects.equal(isFederatedNamespace, another.isFederatedNamespace);
+        return Objects.equal(bkZkServersForWriter, another.bkZkServersForWriter) &&
+               Objects.equal(bkZkServersForReader, another.bkZkServersForReader) &&
+               Objects.equal(dlZkServersForWriter, another.dlZkServersForWriter) &&
+               Objects.equal(dlZkServersForReader, another.dlZkServersForReader) &&
+               Objects.equal(bkLedgersPath, another.bkLedgersPath) &&
+               sanityCheckTxnID == another.sanityCheckTxnID &&
+               encodeRegionID == another.encodeRegionID &&
+               Objects.equal(aclRootPath, another.aclRootPath) &&
+               Objects.equal(firstLogSegmentSeqNo, another.firstLogSegmentSeqNo) &&
+               Objects.equal(isFederatedNamespace, another.isFederatedNamespace);
 
     }
 
@@ -356,8 +355,8 @@ public class BKDLConfig implements DLConfig {
         try {
             configFormat.read(protocol);
         } catch (TException e) {
-            throw new IOException("Failed to deserialize data '"
-                    + new String(data, UTF_8) + "' : ", e);
+            throw new IOException("Failed to deserialize data '" +
+                    new String(data, UTF_8) + "' : ", e);
         }
         // bookkeeper cluster settings
         if (configFormat.isSetBkZkServers()) {
@@ -393,8 +392,8 @@ public class BKDLConfig implements DLConfig {
         isFederatedNamespace = configFormat.isSetFederatedNamespace() && configFormat.isFederatedNamespace();
 
         // Validate the settings
-        if (null == bkZkServersForWriter || null == bkZkServersForReader || null == bkLedgersPath
-                || null == dlZkServersForWriter || null == dlZkServersForReader) {
+        if (null == bkZkServersForWriter || null == bkZkServersForReader || null == bkLedgersPath ||
+                null == dlZkServersForWriter || null == dlZkServersForReader) {
             throw new IOException("Missing zk/bk settings in BKDL Config : " + new String(data, UTF_8));
         }
     }

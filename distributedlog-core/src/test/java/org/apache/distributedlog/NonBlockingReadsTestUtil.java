@@ -17,9 +17,6 @@
  */
 package org.apache.distributedlog;
 
-import static org.junit.Assert.*;
-import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 import org.apache.distributedlog.api.DistributedLogManager;
 import org.apache.distributedlog.exceptions.LogEmptyException;
 import org.apache.distributedlog.exceptions.LogNotFoundException;
@@ -28,11 +25,13 @@ import org.apache.distributedlog.util.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.util.concurrent.TimeUnit;
 
-
+import static org.junit.Assert.*;
 
 /**
- * Utils for non blocking reads tests.
+ * Utils for non blocking reads tests
  */
 class NonBlockingReadsTestUtil {
 

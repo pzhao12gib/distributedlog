@@ -17,9 +17,6 @@
  */
 package org.apache.distributedlog;
 
-import static org.junit.Assert.*;
-import java.util.List;
-import java.util.concurrent.LinkedBlockingQueue;
 import org.apache.distributedlog.LogSegmentMetadata.LogSegmentMetadataVersion;
 import org.apache.distributedlog.api.AsyncLogReader;
 import org.apache.distributedlog.common.concurrent.FutureEventListener;
@@ -28,13 +25,17 @@ import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.List;
+import java.util.concurrent.LinkedBlockingQueue;
+
+import static org.junit.Assert.*;
 
 /**
  * Test Cases related to sequence ids.
  */
 public class TestSequenceID extends TestDistributedLogBase {
 
-    private static final Logger logger = LoggerFactory.getLogger(TestSequenceID.class);
+    static final Logger logger = LoggerFactory.getLogger(TestSequenceID.class);
 
     @Test(timeout = 60000)
     public void testCompleteV4LogSegmentAsV4() throws Exception {
@@ -213,7 +214,7 @@ public class TestSequenceID extends TestDistributedLogBase {
         List<LogSegmentMetadata> segmentsv4 = dlmv4.getLogSegments();
         assertEquals(11, segmentsv4.size());
 
-        for (int i = 7; i < 11; i++) {
+        for(int i = 7; i < 11; i++) {
             assertFalse(segmentsv4.get(i).isInProgress());
             assertTrue(segmentsv4.get(i).getStartSequenceId() < 0);
         }

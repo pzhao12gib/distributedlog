@@ -26,13 +26,11 @@ import org.apache.distributedlog.io.AsyncCloseable;
 
 /**
  * An interface class to read the enveloped entry (serialized bytes of
- * {@link org.apache.distributedlog.Entry}) from a log segment.
+ * {@link org.apache.distributedlog.Entry}) from a log segment
  */
 @Beta
 public interface LogSegmentEntryReader extends AsyncCloseable {
-    /**
-     * An interface Listener for StateChange.
-     */
+
     interface StateChangeListener {
 
         /**
@@ -49,7 +47,7 @@ public interface LogSegmentEntryReader extends AsyncCloseable {
     void start();
 
     /**
-     * Register the state change listener.
+     * Register the state change listener
      *
      * @param listener register the state change listener
      * @return entry reader
@@ -57,7 +55,7 @@ public interface LogSegmentEntryReader extends AsyncCloseable {
     LogSegmentEntryReader registerListener(StateChangeListener listener);
 
     /**
-     * Unregister the state change listener.
+     * Unregister the state change listener
      *
      * @param listener register the state change listener
      * @return entry reader
@@ -80,12 +78,12 @@ public interface LogSegmentEntryReader extends AsyncCloseable {
 
     /**
      * Read next <i>numEntries</i> entries from current log segment.
-     *
-     *  <p><i>numEntries</i> will be best-effort.
+     * <p>
+     * <i>numEntries</i> will be best-effort.
      *
      * @param numEntries num entries to read from current log segment
      * @return A promise that when satisified will contain a non-empty list of entries with their content.
-     * @throw {@link org.apache.distributedlog.exceptions.EndOfLogSegmentException} when
+     * @throws {@link org.apache.distributedlog.exceptions.EndOfLogSegmentException} when
      *          read entries beyond the end of a <i>closed</i> log segment.
      */
     CompletableFuture<List<Entry.Reader>> readNext(int numEntries);

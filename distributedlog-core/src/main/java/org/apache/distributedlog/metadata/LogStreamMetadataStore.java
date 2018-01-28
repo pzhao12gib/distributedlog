@@ -19,15 +19,14 @@ package org.apache.distributedlog.metadata;
 
 import com.google.common.annotations.Beta;
 import com.google.common.base.Optional;
-import java.io.Closeable;
-import java.net.URI;
 import java.util.concurrent.CompletableFuture;
-import org.apache.distributedlog.common.util.PermitManager;
 import org.apache.distributedlog.lock.DistributedLock;
 import org.apache.distributedlog.logsegment.LogSegmentMetadataStore;
+import org.apache.distributedlog.common.util.PermitManager;
 import org.apache.distributedlog.util.Transaction;
 
-
+import java.io.Closeable;
+import java.net.URI;
 
 /**
  * The interface to manage the log stream metadata. The implementation is responsible
@@ -44,7 +43,7 @@ public interface LogStreamMetadataStore extends Closeable {
     Transaction<Object> newTransaction();
 
     /**
-     * Ensure the existence of a log stream.
+     * Ensure the existence of a log stream
      *
      * @param uri the location of the log stream
      * @param logName the name of the log stream
@@ -93,18 +92,6 @@ public interface LogStreamMetadataStore extends Closeable {
      * @return future represents the result of the deletion.
      */
     CompletableFuture<Void> deleteLog(URI uri, String streamName);
-
-    /**
-     * Rename the log from <i>oldStreamName</i> to <i>newStreamName</i>.
-     *
-     * @param uri the location to store the metadata of the log
-     * @param oldStreamName the old name of the log stream
-     * @param newStreamName the new name of the log stream
-     * @return future represents the result of the rename operation.
-     */
-    CompletableFuture<Void> renameLog(URI uri,
-                                      String oldStreamName,
-                                      String newStreamName);
 
     /**
      * Get the log segment metadata store.

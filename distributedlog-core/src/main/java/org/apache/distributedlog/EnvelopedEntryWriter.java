@@ -17,39 +17,31 @@
  */
 package org.apache.distributedlog;
 
-import static org.apache.distributedlog.EnvelopedEntry.COMPRESSED_SIZE_OFFSET;
-import static org.apache.distributedlog.EnvelopedEntry.COMPRESSION_CODEC_MASK;
-import static org.apache.distributedlog.EnvelopedEntry.CURRENT_VERSION;
-import static org.apache.distributedlog.EnvelopedEntry.DECOMPRESSED_SIZE_OFFSET;
-import static org.apache.distributedlog.EnvelopedEntry.FLAGS_OFFSET;
-import static org.apache.distributedlog.EnvelopedEntry.HEADER_LENGTH;
-import static org.apache.distributedlog.EnvelopedEntry.VERSION_OFFSET;
-import static org.apache.distributedlog.LogRecord.MAX_LOGRECORDSET_SIZE;
-import static org.apache.distributedlog.LogRecord.MAX_LOGRECORD_SIZE;
-
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.PooledByteBufAllocator;
-import io.netty.util.ReferenceCountUtil;
-import java.io.IOException;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import org.apache.distributedlog.Entry.Writer;
 import org.apache.distributedlog.exceptions.InvalidEnvelopedEntryException;
 import org.apache.distributedlog.exceptions.LogRecordTooLongException;
+import org.apache.distributedlog.exceptions.WriteCancelledException;
 import org.apache.distributedlog.exceptions.WriteException;
+import org.apache.distributedlog.io.Buffer;
 import org.apache.distributedlog.io.CompressionCodec;
-import org.apache.distributedlog.io.CompressionCodec.Type;
-import org.apache.distributedlog.io.CompressionUtils;
+import org.apache.bookkeeper.stats.StatsLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.LinkedList;
+import java.util.List;
+
+import static org.apache.distributedlog.LogRecord.MAX_LOGRECORD_SIZE;
+
 /**
- * {@link ByteBuf} based log record set writer.
+ * {@link org.apache.distributedlog.io.Buffer} based log record set writer.
  */
 class EnvelopedEntryWriter implements Writer {
 
-    private static final Logger logger = LoggerFactory.getLogger(EnvelopedEntryWriter.class);
+    static final Logger logger = LoggerFactory.getLogger(EnvelopedEntryWriter.class);
 
     private static class WriteRequest {
 
@@ -64,13 +56,12 @@ class EnvelopedEntryWriter implements Writer {
     }
 
     private final String logName;
-    private final ByteBuf buffer;
-    private ByteBuf finalizedBuffer = null;
+    private final Buffer buffer;
     private final LogRecord.Writer writer;
     private final List<WriteRequest> writeRequests;
     private final boolean envelopeBeforeTransmit;
     private final CompressionCodec.Type codec;
-    private final int flags;
+    private final StatsLogger statsLogger;
     private int count = 0;
     private boolean hasUserData = false;
     private long maxTxId = Long.MIN_VALUE;
@@ -78,19 +69,22 @@ class EnvelopedEntryWriter implements Writer {
     EnvelopedEntryWriter(String logName,
                          int initialBufferSize,
                          boolean envelopeBeforeTransmit,
-                         CompressionCodec.Type codec) {
+                         CompressionCodec.Type codec,
+                         StatsLogger statsLogger) {
         this.logName = logName;
-        this.buffer = PooledByteBufAllocator.DEFAULT.buffer(
-                Math.min(Math.max(initialBufferSize * 6 / 5, HEADER_LENGTH), MAX_LOGRECORDSET_SIZE),
-                MAX_LOGRECORDSET_SIZE);
-        this.writer = new LogRecord.Writer(buffer);
+        this.buffer = new Buffer(initialBufferSize * 6 / 5);
+        this.writer = new LogRecord.Writer(new DataOutputStream(buffer));
         this.writeRequests = new LinkedList<WriteRequest>();
         this.envelopeBeforeTransmit = envelopeBeforeTransmit;
         this.codec = codec;
-        this.flags = codec.code() & COMPRESSION_CODEC_MASK;
-        if (envelopeBeforeTransmit) {
-            this.buffer.writerIndex(HEADER_LENGTH);
-        }
+        this.statsLogger = statsLogger;
+    }
+
+    @Override
+    public synchronized void reset() {
+        cancelPromises(new WriteCancelledException(logName, "Record Set is reset"));
+        count = 0;
+        this.buffer.reset();
     }
 
     @Override
@@ -152,7 +146,7 @@ class EnvelopedEntryWriter implements Writer {
 
     @Override
     public int getNumBytes() {
-        return buffer.readableBytes();
+        return buffer.size();
     }
 
     @Override
@@ -161,45 +155,24 @@ class EnvelopedEntryWriter implements Writer {
     }
 
     @Override
-    public synchronized ByteBuf getBuffer() throws InvalidEnvelopedEntryException, IOException {
-        if (null == finalizedBuffer) {
-            finalizedBuffer = finalizeBuffer();
+    public synchronized Buffer getBuffer() throws InvalidEnvelopedEntryException, IOException {
+        if (!envelopeBeforeTransmit) {
+            return buffer;
         }
-        return finalizedBuffer.slice();
-    }
-
-    private ByteBuf finalizeBuffer() {
-       if (!envelopeBeforeTransmit) {
-            return buffer.retain();
-        }
-
-        int dataOffset = HEADER_LENGTH;
-        int dataLen = buffer.readableBytes() - HEADER_LENGTH;
-
-        if (Type.NONE == codec) {
-            // update version
-            buffer.setByte(VERSION_OFFSET, CURRENT_VERSION);
-            // update the flags
-            buffer.setInt(FLAGS_OFFSET, flags);
-            // update data len
-            buffer.setInt(DECOMPRESSED_SIZE_OFFSET, dataLen);
-            buffer.setInt(COMPRESSED_SIZE_OFFSET, dataLen);
-            return buffer.retain();
-        }
-
-        // compression
-        CompressionCodec compressor =
-                CompressionUtils.getCompressionCodec(codec);
-        ByteBuf uncompressedBuf = buffer.slice(dataOffset, dataLen);
-        ByteBuf compressedBuf = compressor.compress(uncompressedBuf, HEADER_LENGTH);
-        // update version
-        compressedBuf.setByte(VERSION_OFFSET, CURRENT_VERSION);
-        // update the flags
-        compressedBuf.setInt(FLAGS_OFFSET, flags);
-        // update data len
-        compressedBuf.setInt(DECOMPRESSED_SIZE_OFFSET, dataLen);
-        compressedBuf.setInt(COMPRESSED_SIZE_OFFSET, compressedBuf.readableBytes() - HEADER_LENGTH);
-        return compressedBuf;
+        // We can't escape this allocation because things need to be read from one byte array
+        // and then written to another. This is the destination.
+        Buffer toSend = new Buffer(buffer.size());
+        byte[] decompressed = buffer.getData();
+        int length = buffer.size();
+        EnvelopedEntry entry = new EnvelopedEntry(EnvelopedEntry.CURRENT_VERSION,
+                                                  codec,
+                                                  decompressed,
+                                                  length,
+                                                  statsLogger);
+        // This will cause an allocation of a byte[] for compression. This can be avoided
+        // but we can do that later only if needed.
+        entry.writeFully(new DataOutputStream(toSend));
+        return toSend;
     }
 
     @Override
@@ -210,18 +183,10 @@ class EnvelopedEntryWriter implements Writer {
     @Override
     public void completeTransmit(long lssn, long entryId) {
         satisfyPromises(lssn, entryId);
-        buffer.release();
-        synchronized (this) {
-            ReferenceCountUtil.release(finalizedBuffer);
-        }
     }
 
     @Override
     public void abortTransmit(Throwable reason) {
         cancelPromises(reason);
-        buffer.release();
-        synchronized (this) {
-            ReferenceCountUtil.release(finalizedBuffer);
-        }
     }
 }

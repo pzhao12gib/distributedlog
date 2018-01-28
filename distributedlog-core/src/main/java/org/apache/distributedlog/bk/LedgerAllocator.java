@@ -16,15 +16,12 @@
  * limitations under the License.
  */
 package org.apache.distributedlog.bk;
-import java.io.IOException;
-import org.apache.bookkeeper.client.LedgerHandle;
 
 import org.apache.distributedlog.util.Allocator;
+import org.apache.bookkeeper.client.LedgerHandle;
 
+import java.io.IOException;
 
-/**
- * Allocator to allocate ledger.
- */
 public interface LedgerAllocator extends Allocator<LedgerHandle, Object> {
 
     /**

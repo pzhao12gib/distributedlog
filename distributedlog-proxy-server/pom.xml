@@ -20,7 +20,7 @@
   <parent>
     <groupId>org.apache.distributedlog</groupId>
     <artifactId>distributedlog</artifactId>
-    <version>0.6.0-SNAPSHOT</version>
+    <version>0.5.0-SNAPSHOT</version>
   </parent>
   <artifactId>distributedlog-proxy-server</artifactId>
   <name>Apache DistributedLog :: Proxy Service</name>
@@ -45,12 +45,6 @@
       <groupId>org.apache.distributedlog</groupId>
       <artifactId>distributedlog-core</artifactId>
       <version>${project.parent.version}</version>
-      <exclusions>
-        <exclusion>
-          <groupId>org.apache.thrift</groupId>
-          <artifactId>libthrift</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>com.twitter</groupId>
@@ -203,6 +197,9 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>findbugs-maven-plugin</artifactId>
+        <configuration>
+          <excludeFilterFile>${basedir}/src/main/resources/findbugsExclude.xml</excludeFilterFile>
+        </configuration>
       </plugin>
       <plugin>
         <artifactId>maven-dependency-plugin</artifactId>
@@ -236,7 +233,7 @@
         </dependencies>
         <configuration>
           <configLocation>distributedlog/checkstyle.xml</configLocation>
-          <suppressionsLocation>distributedlog/suppressions-packages.xml</suppressionsLocation>
+          <suppressionsLocation>distributedlog/suppressions.xml</suppressionsLocation>
           <consoleOutput>true</consoleOutput>
           <failOnViolation>true</failOnViolation>
           <includeResources>false</includeResources>
@@ -244,7 +241,7 @@
         </configuration>
         <executions>
           <execution>
-            <phase>validate</phase>
+            <phase>test-compile</phase>
             <goals>
               <goal>check</goal>
             </goals>
@@ -275,11 +272,4 @@
       </dependencies>
     </profile>
   </profiles>
-  <repositories>
-    <repository>
-      <id>twitter-repo</id>
-      <name>Twitter Maven Repo</name>
-      <url>http://maven.twttr.com</url>
-    </repository>
-  </repositories>
 </project>

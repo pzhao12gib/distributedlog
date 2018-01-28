@@ -17,35 +17,24 @@
  */
 package org.apache.distributedlog.lock;
 
-import static org.apache.distributedlog.lock.ZKSessionLock.asyncParseClientID;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.bookkeeper.stats.NullStatsLogger;
-import org.apache.commons.lang3.tuple.Pair;
+import org.apache.distributedlog.exceptions.UnexpectedException;
+import org.apache.distributedlog.util.FailpointUtils;
+import org.apache.distributedlog.exceptions.LockingException;
 import org.apache.distributedlog.TestDistributedLogBase;
+import org.apache.distributedlog.common.concurrent.FutureEventListener;
+import org.apache.distributedlog.util.OrderedScheduler;
+import org.apache.distributedlog.util.Utils;
 import org.apache.distributedlog.ZooKeeperClient;
 import org.apache.distributedlog.ZooKeeperClientBuilder;
 import org.apache.distributedlog.ZooKeeperClientUtils;
-import org.apache.distributedlog.common.concurrent.FutureEventListener;
-import org.apache.distributedlog.exceptions.LockingException;
 import org.apache.distributedlog.exceptions.OwnershipAcquireFailedException;
-import org.apache.distributedlog.exceptions.UnexpectedException;
-import org.apache.distributedlog.util.FailpointUtils;
-import org.apache.distributedlog.util.OrderedScheduler;
-import org.apache.distributedlog.util.Utils;
+import org.apache.bookkeeper.stats.NullStatsLogger;
+import org.apache.commons.lang3.tuple.Pair;
 import org.apache.zookeeper.CreateMode;
 import org.apache.zookeeper.ZooDefs;
 import org.apache.zookeeper.ZooKeeper;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -54,18 +43,31 @@ import org.junit.rules.TestName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.apache.distributedlog.lock.ZKSessionLock.asyncParseClientID;
 
 /**
- * Distributed Lock Tests.
+ * Distributed Lock Tests
  */
 public class TestDistributedLock extends TestDistributedLogBase {
 
-    private static final Logger logger = LoggerFactory.getLogger(TestDistributedLock.class);
+    static final Logger logger = LoggerFactory.getLogger(TestDistributedLock.class);
 
     @Rule
     public TestName runtime = new TestName();
 
-    private static final  int sessionTimeoutMs = 2000;
+    private final static int sessionTimeoutMs = 2000;
 
     private ZooKeeperClient zkc;
     private ZooKeeperClient zkc0; // used for checking
@@ -311,8 +313,7 @@ public class TestDistributedLock extends TestDistributedLogBase {
 
     @Test(timeout = 60000)
     public void testCheckWriteLockFailureWhenLockIsAcquiredByOthers() throws Exception {
-        String lockPath = "/test-check-write-lock-failure-when-lock-is-acquired-by-others-"
-                + System.currentTimeMillis();
+        String lockPath = "/test-check-write-lock-failure-when-lock-is-acquired-by-others-" + System.currentTimeMillis();
         String clientId = "test-check-write-lock-failure";
 
         createLockPath(zkc.get(), lockPath);
@@ -723,7 +724,7 @@ public class TestDistributedLock extends TestDistributedLogBase {
         // acquired).
         for (int i = 0; i < count; i++) {
             latches[i].await();
-            assertLatchesSet(latches, i + 1);
+            assertLatchesSet(latches, i+1);
             Utils.ioResult(results.get(i));
             Utils.ioResult(lockArray[i].asyncClose());
         }

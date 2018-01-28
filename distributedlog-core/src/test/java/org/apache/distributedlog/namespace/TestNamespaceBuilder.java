@@ -17,9 +17,6 @@
  */
 package org.apache.distributedlog.namespace;
 
-import static org.apache.distributedlog.LocalDLMEmulator.DLOG_NAMESPACE;
-import static org.junit.Assert.assertTrue;
-import java.net.URI;
 import org.apache.distributedlog.BKDistributedLogNamespace;
 import org.apache.distributedlog.DistributedLogConfiguration;
 import org.apache.distributedlog.TestDistributedLogBase;
@@ -27,11 +24,13 @@ import org.apache.distributedlog.api.namespace.Namespace;
 import org.apache.distributedlog.api.namespace.NamespaceBuilder;
 import org.junit.Test;
 
+import java.net.URI;
 
-
+import static org.apache.distributedlog.LocalDLMEmulator.DLOG_NAMESPACE;
+import static org.junit.Assert.assertTrue;
 
 /**
- * Test Namespace Builder.
+ * Test Namespace Builder
  */
 public class TestNamespaceBuilder extends TestDistributedLogBase {
 

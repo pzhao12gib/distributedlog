@@ -40,23 +40,20 @@ import org.apache.bookkeeper.versioning.Version;
 import org.apache.bookkeeper.versioning.Versioned;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.distributedlog.callback.LogSegmentNamesListener;
-import org.apache.distributedlog.common.concurrent.FutureEventListener;
-import org.apache.distributedlog.common.concurrent.FutureUtils;
 import org.apache.distributedlog.exceptions.LogEmptyException;
 import org.apache.distributedlog.exceptions.LogSegmentNotFoundException;
 import org.apache.distributedlog.exceptions.UnexpectedException;
+import org.apache.distributedlog.logsegment.LogSegmentEntryStore;
+import org.apache.distributedlog.metadata.LogMetadata;
 import org.apache.distributedlog.io.AsyncAbortable;
 import org.apache.distributedlog.io.AsyncCloseable;
-import org.apache.distributedlog.logsegment.LogSegmentEntryStore;
-import org.apache.distributedlog.logsegment.LogSegmentFilter;
 import org.apache.distributedlog.logsegment.LogSegmentMetadataCache;
-import org.apache.distributedlog.logsegment.LogSegmentMetadataStore;
 import org.apache.distributedlog.logsegment.PerStreamLogSegmentCache;
-
-import org.apache.distributedlog.metadata.LogMetadata;
-
+import org.apache.distributedlog.logsegment.LogSegmentFilter;
+import org.apache.distributedlog.logsegment.LogSegmentMetadataStore;
 import org.apache.distributedlog.metadata.LogStreamMetadataStore;
-
+import org.apache.distributedlog.common.concurrent.FutureEventListener;
+import org.apache.distributedlog.common.concurrent.FutureUtils;
 import org.apache.distributedlog.util.OrderedScheduler;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,8 +65,8 @@ import org.slf4j.LoggerFactory;
  * The log handler is a base class on managing log segments. so all the metrics
  * here are related to log segments retrieval and exposed under `logsegments`.
  * These metrics are all OpStats, in the format of <code>`scope`/logsegments/`op`</code>.
- *
- * <p>Those operations are:
+ * <p>
+ * Those operations are:
  * <ul>
  * <li>get_inprogress_segment: time between the inprogress log segment created and
  * the handler read it.
@@ -189,8 +186,7 @@ abstract class BKLogHandler implements AsyncCloseable, AsyncAbortable {
                     @Override
                     public void onSuccess(Versioned<List<LogSegmentMetadata>> ledgerList) {
                         if (ledgerList.getValue().isEmpty()) {
-                            promise.completeExceptionally(new LogEmptyException("Log "
-                                    + getFullyQualifiedName() + " has no records"));
+                            promise.completeExceptionally(new LogEmptyException("Log " + getFullyQualifiedName() + " has no records"));
                             return;
                         }
                         CompletableFuture<LogRecordWithDLSN> firstRecord = null;
@@ -203,8 +199,7 @@ abstract class BKLogHandler implements AsyncCloseable, AsyncAbortable {
                         if (null != firstRecord) {
                             FutureUtils.proxyTo(firstRecord, promise);
                         } else {
-                            promise.completeExceptionally(new LogEmptyException("Log "
-                                    + getFullyQualifiedName() + " has no records"));
+                            promise.completeExceptionally(new LogEmptyException("Log " + getFullyQualifiedName() + " has no records"));
                         }
                     }
 
@@ -223,8 +218,7 @@ abstract class BKLogHandler implements AsyncCloseable, AsyncAbortable {
         return promise;
     }
 
-    public CompletableFuture<LogRecordWithDLSN> getLastLogRecordAsync(final boolean recover,
-                                                                      final boolean includeEndOfStream) {
+    public CompletableFuture<LogRecordWithDLSN> getLastLogRecordAsync(final boolean recover, final boolean includeEndOfStream) {
         final CompletableFuture<LogRecordWithDLSN> promise = new CompletableFuture<LogRecordWithDLSN>();
         streamMetadataStore.logExists(
             logMetadata.getUri(),
@@ -432,16 +426,13 @@ abstract class BKLogHandler implements AsyncCloseable, AsyncAbortable {
         ).whenComplete(new FutureEventListener<LogRecordWithDLSN>() {
             @Override
             public void onSuccess(LogRecordWithDLSN value) {
-                recoverLastEntryStats.registerSuccessfulEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
-                recoverScannedEntriesStats.registerSuccessfulValue(numRecordsScanned.get());
+                recoverLastEntryStats.registerSuccessfulEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
+                recoverScannedEntriesStats.registerSuccessfulEvent(numRecordsScanned.get());
             }
 
             @Override
             public void onFailure(Throwable cause) {
-                recoverLastEntryStats.registerFailedEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS),
-                    TimeUnit.MICROSECONDS);
+                recoverLastEntryStats.registerFailedEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             }
         });
     }
@@ -517,9 +508,9 @@ abstract class BKLogHandler implements AsyncCloseable, AsyncAbortable {
                         LOG.warn("{} received inprogress log segment in {} millis: {}",
                                  new Object[] { getFullyQualifiedName(), elapsedMillis, metadata });
                     }
-                    getInprogressSegmentStat.registerSuccessfulEvent(elapsedMicroSec, TimeUnit.MICROSECONDS);
+                    getInprogressSegmentStat.registerSuccessfulEvent(elapsedMicroSec);
                 } else {
-                    negativeGetInprogressSegmentStat.registerSuccessfulEvent(-elapsedMicroSec, TimeUnit.MICROSECONDS);
+                    negativeGetInprogressSegmentStat.registerSuccessfulEvent(-elapsedMicroSec);
                 }
             } else {
                 long elapsedMillis = ts - metadata.getCompletionTime();
@@ -529,9 +520,9 @@ abstract class BKLogHandler implements AsyncCloseable, AsyncAbortable {
                         LOG.warn("{} received completed log segment in {} millis : {}",
                                  new Object[] { getFullyQualifiedName(), elapsedMillis, metadata });
                     }
-                    getCompletedSegmentStat.registerSuccessfulEvent(elapsedMicroSec, TimeUnit.MICROSECONDS);
+                    getCompletedSegmentStat.registerSuccessfulEvent(elapsedMicroSec);
                 } else {
-                    negativeGetCompletedSegmentStat.registerSuccessfulEvent(-elapsedMicroSec, TimeUnit.MICROSECONDS);
+                    negativeGetCompletedSegmentStat.registerSuccessfulEvent(-elapsedMicroSec);
                 }
             }
         }
@@ -559,7 +550,7 @@ abstract class BKLogHandler implements AsyncCloseable, AsyncAbortable {
     }
 
     /**
-     * Update the log segment cache with updated mapping.
+     * Update the log segment cache with updated mapping
      *
      * @param logSegmentsRemoved log segments removed
      * @param logSegmentsAdded log segments added
@@ -576,7 +567,7 @@ abstract class BKLogHandler implements AsyncCloseable, AsyncAbortable {
     }
 
     /**
-     * Read the log segments from the store and register a listener.
+     * Read the log segments from the store and register a listener
      * @param comparator
      * @param segmentFilter
      * @param logSegmentNamesListener
@@ -698,8 +689,7 @@ abstract class BKLogHandler implements AsyncCloseable, AsyncAbortable {
     private void completeReadLogSegmentsFromStore(final Set<String> removedSegments,
                                                   final Map<String, LogSegmentMetadata> addedSegments,
                                                   final Comparator<LogSegmentMetadata> comparator,
-                                                  final CompletableFuture<Versioned<List<LogSegmentMetadata>>>
-                                                          readResult,
+                                                  final CompletableFuture<Versioned<List<LogSegmentMetadata>>> readResult,
                                                   final Version logSegmentNamesVersion,
                                                   final AtomicInteger numChildren,
                                                   final AtomicInteger numFailures) {

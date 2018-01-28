@@ -68,8 +68,8 @@ class BKSyncLogWriter extends BKAbstractLogWriter implements LogWriter {
      * New data can be still written to the stream while flush is ongoing.
      */
     @Override
-    public long flush() throws IOException {
-        checkClosedOrInError("flush");
+    public long setReadyToFlush() throws IOException {
+        checkClosedOrInError("setReadyToFlush");
         long highestTransactionId = 0;
         BKLogSegmentWriter writer = getCachedLogWriter();
         if (null != writer) {
@@ -86,8 +86,8 @@ class BKSyncLogWriter extends BKAbstractLogWriter implements LogWriter {
      * becomes full or a certain period of time is elapsed.
      */
     @Override
-    public long commit() throws IOException {
-        checkClosedOrInError("commit");
+    public long flushAndSync() throws IOException {
+        checkClosedOrInError("flushAndSync");
 
         LOG.debug("FlushAndSync Started");
         long highestTransactionId = 0;

@@ -52,13 +52,13 @@ public class TestLogWriterImpl {
     @Test
     public void testSetReadyToFlush() throws Exception {
         writer.setReadyToFlush();
-        verify(underlying, times(1)).flush();
+        verify(underlying, times(1)).setReadyToFlush();
     }
 
     @Test
     public void testFlushAndSync() throws Exception {
         writer.flushAndSync();
-        verify(underlying, times(1)).commit();
+        verify(underlying, times(1)).flushAndSync();
     }
 
     @Test

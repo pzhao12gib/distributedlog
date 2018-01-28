@@ -51,11 +51,9 @@ public interface LogMetadataStore {
     /**
      * Retrieves logs from the namespace.
      *
-     * @param logNamePrefix
-     *          log name prefix.
      * @return iterator of logs of the namespace.
      */
-    CompletableFuture<Iterator<String>> getLogs(String logNamePrefix);
+    CompletableFuture<Iterator<String>> getLogs();
 
     /**
      * Register a namespace listener on streams changes.

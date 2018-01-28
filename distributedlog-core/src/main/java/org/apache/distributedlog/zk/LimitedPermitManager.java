@@ -17,21 +17,20 @@
  */
 package org.apache.distributedlog.zk;
 
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
+import org.apache.distributedlog.common.util.PermitManager;
 import org.apache.bookkeeper.stats.Gauge;
 import org.apache.bookkeeper.stats.NullStatsLogger;
 import org.apache.bookkeeper.stats.StatsLogger;
-import org.apache.distributedlog.common.util.PermitManager;
 import org.apache.zookeeper.WatchedEvent;
 import org.apache.zookeeper.Watcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Manager to control all the log segments rolling.
@@ -40,7 +39,7 @@ public class LimitedPermitManager implements PermitManager, Runnable, Watcher {
 
     static final Logger LOG = LoggerFactory.getLogger(LimitedPermitManager.class);
 
-    enum PermitState {
+    static enum PermitState {
         ALLOWED, DISALLOWED, DISABLED
     }
 
@@ -104,7 +103,7 @@ public class LimitedPermitManager implements PermitManager, Runnable, Watcher {
     }
 
     @Override
-    public synchronized Permit acquirePermit() {
+    synchronized public Permit acquirePermit() {
         if (!enablePermits) {
             return new EpochPermit(PermitState.DISABLED);
         }
@@ -117,7 +116,7 @@ public class LimitedPermitManager implements PermitManager, Runnable, Watcher {
     }
 
     @Override
-    public synchronized void releasePermit(Permit permit) {
+    synchronized public void releasePermit(Permit permit) {
         if (null != semaphore && permit.isAllowed()) {
             if (period <= 0) {
                 semaphore.release();
@@ -125,8 +124,8 @@ public class LimitedPermitManager implements PermitManager, Runnable, Watcher {
                 try {
                     executorService.schedule(this, period, timeUnit);
                 } catch (RejectedExecutionException ree) {
-                    LOG.warn("Failed on scheduling releasing permit in given period ({}ms)."
-                            + " Release it immediately : ", timeUnit.toMillis(period), ree);
+                    LOG.warn("Failed on scheduling releasing permit in given period ({}ms)." +
+                            " Release it immediately : ", timeUnit.toMillis(period), ree);
                     semaphore.release();
                 }
             }
@@ -134,11 +133,11 @@ public class LimitedPermitManager implements PermitManager, Runnable, Watcher {
     }
 
     @Override
-    public synchronized boolean disallowObtainPermits(Permit permit) {
+    synchronized public boolean disallowObtainPermits(Permit permit) {
         if (!(permit instanceof EpochPermit)) {
             return false;
         }
-        if (epoch.getAndIncrement() == ((EpochPermit) permit).getEpoch()) {
+        if (epoch.getAndIncrement() == ((EpochPermit)permit).getEpoch()) {
             this.enablePermits = false;
             LOG.info("EnablePermits = {}, Epoch = {}.", this.enablePermits, epoch.get());
             return true;
@@ -153,7 +152,7 @@ public class LimitedPermitManager implements PermitManager, Runnable, Watcher {
     }
 
     @Override
-    public synchronized boolean allowObtainPermits() {
+    synchronized public boolean allowObtainPermits() {
         forceSetAllowPermits(true);
         return true;
     }
@@ -189,7 +188,7 @@ public class LimitedPermitManager implements PermitManager, Runnable, Watcher {
     }
 
     public void unregisterGauge() {
-        if (this.statsLogger != null && this.outstandingGauge != null) {
+        if(this.statsLogger != null && this.outstandingGauge != null) {
             this.statsLogger.scope("permits").unregisterGauge("outstanding", this.outstandingGauge);
         }
     }

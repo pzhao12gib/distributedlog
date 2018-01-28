@@ -17,14 +17,15 @@
  */
 package org.apache.distributedlog;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.base.Optional;
-import io.netty.channel.EventLoopGroup;
-import io.netty.util.HashedWheelTimer;
-import org.apache.bookkeeper.feature.FeatureProvider;
+import com.google.common.base.Preconditions;
 import org.apache.bookkeeper.stats.NullStatsLogger;
 import org.apache.bookkeeper.stats.StatsLogger;
+import org.jboss.netty.channel.socket.ClientSocketChannelFactory;
+import org.jboss.netty.util.HashedWheelTimer;
+import org.apache.bookkeeper.feature.FeatureProvider;
+
+import org.apache.bookkeeper.feature.Feature;
 
 /**
  * Builder to build bookkeeper client.
@@ -54,7 +55,7 @@ public class BookKeeperClientBuilder {
     // statsLogger
     private StatsLogger statsLogger = NullStatsLogger.INSTANCE;
     // client channel factory
-    private EventLoopGroup eventLoopGroup = null;
+    private ClientSocketChannelFactory channelFactory = null;
     // request timer
     private HashedWheelTimer requestTimer = null;
     // feature provider
@@ -149,12 +150,12 @@ public class BookKeeperClientBuilder {
     /**
      * Build BookKeeper client using existing <i>channelFactory</i>.
      *
-     * @param eventLoopGroup
-     *          event loop group used to build bookkeeper client.
+     * @param channelFactory
+     *          Channel Factory used to build bookkeeper client.
      * @return bookkeeper client builder.
      */
-    public synchronized BookKeeperClientBuilder eventLoopGroup(EventLoopGroup eventLoopGroup) {
-        this.eventLoopGroup = eventLoopGroup;
+    public synchronized BookKeeperClientBuilder channelFactory(ClientSocketChannelFactory channelFactory) {
+        this.channelFactory = channelFactory;
         return this;
     }
 
@@ -188,10 +189,10 @@ public class BookKeeperClientBuilder {
     }
 
     private void validateParameters() {
-        checkNotNull(name, "Missing client name.");
-        checkNotNull(dlConfig, "Missing DistributedLog Configuration.");
-        checkArgument(null == zkc || null == zkServers, "Missing zookeeper setting.");
-        checkNotNull(ledgersPath, "Missing Ledgers Root Path.");
+        Preconditions.checkNotNull(name, "Missing client name.");
+        Preconditions.checkNotNull(dlConfig, "Missing DistributedLog Configuration.");
+        Preconditions.checkArgument(null == zkc || null == zkServers, "Missing zookeeper setting.");
+        Preconditions.checkNotNull(ledgersPath, "Missing Ledgers Root Path.");
     }
 
     public synchronized BookKeeperClient build() {
@@ -203,15 +204,6 @@ public class BookKeeperClientBuilder {
 
     private BookKeeperClient buildClient() {
         validateParameters();
-        return new BookKeeperClient(
-            dlConfig,
-            name,
-            zkServers,
-            zkc,
-            ledgersPath,
-            eventLoopGroup,
-            requestTimer,
-            statsLogger,
-            featureProvider);
+        return new BookKeeperClient(dlConfig, name, zkServers, zkc, ledgersPath, channelFactory, requestTimer, statsLogger, featureProvider);
     }
 }
