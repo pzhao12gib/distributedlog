@@ -25,16 +25,8 @@
 # Log4j configuration file
 # DLOG_LOG_CONF=
 
-DLOG_JVM_NUM_GC_THREADS=4
-
-# MEM settings
-DLOG_JVM_MEM_OPTS="-Xms2g -Xmx2g -XX:MaxDirectMemorySize=4g -XX:MaxMetaspaceSize=128M -XX:MetaspaceSize=128M"
-
-# GC Settings
-DLOG_JVM_GC_OPTS="-XX:ParallelGCThreads=${DLOG_JVM_NUM_GC_THREADS} -Xloggc:gc.log -XX:+CMSScavengeBeforeRemark -XX:TargetSurvivorRatio=90 -XX:+PrintCommandLineFlags -verbosegc -XX:NumberOfGCLogFiles=2 -XX:GCLogFileSize=64M -XX:+UseGCLogFileRotation -XX:+PrintGCDetails -XX:+PrintGCTimeStamps -XX:+PrintGCDateStamps -XX:+PrintGCCause -XX:+PrintPromotionFailure -XX:+PrintTenuringDistribution -XX:+PrintHeapAtGC -XX:+HeapDumpOnOutOfMemoryError -XX:+UseConcMarkSweepGC"
-
 # Extra options to be passed to the jvm
-DLOG_EXTRA_OPTS="${DLOG_JVM_MEM_OPTS} ${DLOG_JVM_GC_OPTS} -Dio.netty.leakDetectionLevel=disabled -Dio.netty.recycler.linkCapacity=1024"
+# DLOG_EXTRA_OPTS=
 
 # Add extra paths to the dlog classpath
 # DLOG_EXTRA_CLASSPATH=

@@ -246,9 +246,9 @@ public class StreamImpl implements Stream {
     }
 
     private DistributedLogManager openLog(String name) throws IOException {
-        java.util.Optional<DistributedLogConfiguration> dlConf = java.util.Optional.empty();
-        java.util.Optional<DynamicDistributedLogConfiguration> dynDlConf = java.util.Optional.of(dynConf);
-        java.util.Optional<StatsLogger> perStreamStatsLogger = java.util.Optional.of(streamLogger);
+        Optional<DistributedLogConfiguration> dlConf = Optional.<DistributedLogConfiguration>absent();
+        Optional<DynamicDistributedLogConfiguration> dynDlConf = Optional.of(dynConf);
+        Optional<StatsLogger> perStreamStatsLogger = Optional.of(streamLogger);
         return dlNamespace.openLog(name, dlConf, dynDlConf, perStreamStatsLogger);
     }
 
@@ -654,11 +654,9 @@ public class StreamImpl implements Stream {
                                             Stopwatch stopwatch,
                                             Promise<Boolean> acquirePromise) {
         if (success) {
-            streamAcquireStat.registerSuccessfulEvent(
-              stopwatch.elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+            streamAcquireStat.registerSuccessfulEvent(stopwatch.elapsed(TimeUnit.MICROSECONDS));
         } else {
-            streamAcquireStat.registerFailedEvent(
-              stopwatch.elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+            streamAcquireStat.registerFailedEvent(stopwatch.elapsed(TimeUnit.MICROSECONDS));
         }
         for (StreamOp op : oldPendingOps) {
             executeOp(op, success);

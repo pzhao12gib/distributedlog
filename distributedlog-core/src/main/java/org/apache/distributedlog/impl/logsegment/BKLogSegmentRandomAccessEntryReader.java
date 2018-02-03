@@ -79,7 +79,7 @@ class BKLogSegmentRandomAccessEntryReader implements
                 .setEntryId(entry.getEntryId())
                 .setEnvelopeEntry(envelopeEntries)
                 .deserializeRecordSet(deserializeRecordSet)
-                .setEntry(entry.getEntryBuffer())
+                .setInputStream(entry.getEntryInputStream())
                 .buildReader();
     }
 
@@ -89,19 +89,11 @@ class BKLogSegmentRandomAccessEntryReader implements
         if (BKException.Code.OK == rc) {
             List<Entry.Reader> entryList = Lists.newArrayList();
             while (entries.hasMoreElements()) {
-                LedgerEntry entry = entries.nextElement();
                 try {
-                    entryList.add(processReadEntry(entry));
+                    entryList.add(processReadEntry(entries.nextElement()));
                 } catch (IOException ioe) {
-                    // release the buffers
-                    while (entries.hasMoreElements()) {
-                        LedgerEntry le = entries.nextElement();
-                        le.getEntryBuffer().release();
-                    }
                     FutureUtils.completeExceptionally(promise, ioe);
                     return;
-                } finally {
-                    entry.getEntryBuffer().release();
                 }
             }
             FutureUtils.complete(promise, entryList);

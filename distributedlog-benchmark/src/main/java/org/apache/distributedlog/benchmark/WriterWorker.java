@@ -272,12 +272,10 @@ public class WriterWorker implements Worker {
         @Override
         public void run() {
             if (null != dlsn) {
-                requestStat.registerSuccessfulEvent(
-                  System.currentTimeMillis() - requestMillis, TimeUnit.MILLISECONDS);
+                requestStat.registerSuccessfulEvent(System.currentTimeMillis() - requestMillis);
             } else {
                 LOG.error("Failed to publish to {} : ", streamName, cause);
-                requestStat.registerFailedEvent(
-                  System.currentTimeMillis() - requestMillis, TimeUnit.MILLISECONDS);
+                requestStat.registerFailedEvent(System.currentTimeMillis() - requestMillis);
                 exceptionsLogger.getCounter(cause.getClass().getName()).inc();
                 if (cause instanceof DLException) {
                     DLException dle = (DLException) cause;

@@ -18,10 +18,6 @@
 package org.apache.distributedlog.api.namespace;
 
 import com.google.common.base.Preconditions;
-import java.io.IOException;
-import java.net.URI;
-import org.apache.bookkeeper.common.annotation.InterfaceAudience.Public;
-import org.apache.bookkeeper.common.annotation.InterfaceStability.Stable;
 import org.apache.distributedlog.BKDistributedLogNamespace;
 import org.apache.distributedlog.DistributedLogConfiguration;
 import org.apache.distributedlog.DistributedLogConstants;
@@ -44,6 +40,9 @@ import org.apache.bookkeeper.stats.StatsLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.net.URI;
+
 /**
  * Builder to construct a <code>Namespace</code>.
  * The builder takes the responsibility of loading backend according to the uri.
@@ -51,8 +50,6 @@ import org.slf4j.LoggerFactory;
  * @see Namespace
  * @since 0.3.32
  */
-@Public
-@Stable
 public class NamespaceBuilder {
 
     private static final Logger logger = LoggerFactory.getLogger(NamespaceBuilder.class);

@@ -45,13 +45,11 @@ public class OpStatsListener<T> implements FutureEventListener<T> {
 
     @Override
     public void onSuccess(T value) {
-        opStatsLogger.registerSuccessfulEvent(
-            stopwatch.elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+        opStatsLogger.registerSuccessfulEvent(stopwatch.elapsed(TimeUnit.MICROSECONDS));
     }
 
     @Override
     public void onFailure(Throwable cause) {
-        opStatsLogger.registerFailedEvent(
-            stopwatch.elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+        opStatsLogger.registerFailedEvent(stopwatch.elapsed(TimeUnit.MICROSECONDS));
     }
 }

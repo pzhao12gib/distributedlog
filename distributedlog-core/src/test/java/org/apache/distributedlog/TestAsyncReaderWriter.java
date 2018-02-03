@@ -17,7 +17,6 @@
  */
 package org.apache.distributedlog;
 
-import io.netty.buffer.ByteBuf;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -316,12 +315,12 @@ public class TestAsyncReaderWriter extends TestDistributedLogBase {
                 writer.write(DLMTestUtil.getLargeLogRecordInstance(txid++));
             }
             if (j % flushPerNumRecords == 0 ) {
-                writer.flush();
-                writer.commit();
+                writer.setReadyToFlush();
+                writer.flushAndSync();
             }
         }
-        writer.flush();
-        writer.commit();
+        writer.setReadyToFlush();
+        writer.flushAndSync();
         writer.close();
         return txid;
     }
@@ -1384,7 +1383,7 @@ public class TestAsyncReaderWriter extends TestDistributedLogBase {
                                 for (int iter = 1; iter <= (2 * idleReaderErrorThreshold / threadSleepTime) ; iter++) {
                                     Thread.sleep(threadSleepTime);
                                     writer.write(DLMTestUtil.getLargeLogRecordInstance(txid, true));
-                                    writer.flush();
+                                    writer.setReadyToFlush();
                                 }
                                 Thread.sleep(threadSleepTime);
                             }
@@ -1994,9 +1993,9 @@ public class TestAsyncReaderWriter extends TestDistributedLogBase {
         // use customized configuration
         dlm = namespace.openLog(
                 name + "-custom",
-                java.util.Optional.empty(),
-                java.util.Optional.of(dynConf),
-                java.util.Optional.empty());
+                Optional.<DistributedLogConfiguration>absent(),
+                Optional.of(dynConf),
+                Optional.<StatsLogger>absent());
         writer = dlm.startAsyncLogSegmentNonPartitioned();
         Utils.ioResult(writer.write(DLMTestUtil.getLogRecordInstance(1L)));
         segments = dlm.getLogSegments();
@@ -2040,8 +2039,10 @@ public class TestAsyncReaderWriter extends TestDistributedLogBase {
             recordSetWriter.writeRecord(ByteBuffer.wrap(record.getPayload()), writePromise);
             recordSetFutures.add(writePromise);
         }
-        final ByteBuf recordSetBuffer = recordSetWriter.getBuffer();
-        LogRecord setRecord = new LogRecord(6L, recordSetBuffer);
+        final ByteBuffer recordSetBuffer = recordSetWriter.getBuffer();
+        byte[] data = new byte[recordSetBuffer.remaining()];
+        recordSetBuffer.get(data);
+        LogRecord setRecord = new LogRecord(6L, data);
         setRecord.setRecordSet();
         CompletableFuture<DLSN> writeRecordSetFuture = writer.write(setRecord);
         writeRecordSetFuture.whenComplete(new FutureEventListener<DLSN>() {

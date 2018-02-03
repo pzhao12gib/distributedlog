@@ -154,8 +154,8 @@ public class TestBKSyncLogReader extends TestDistributedLogBase {
             LogRecord record = DLMTestUtil.getLogRecordInstance(i);
             out.write(record);
         }
-        out.flush();
-        out.commit();
+        out.setReadyToFlush();
+        out.flushAndSync();
 
         logger.info("Write first 10 records");
 
@@ -174,8 +174,8 @@ public class TestBKSyncLogReader extends TestDistributedLogBase {
             LogRecord record = DLMTestUtil.getLogRecordInstance(i);
             out.write(record);
         }
-        out.flush();
-        out.commit();
+        out.setReadyToFlush();
+        out.flushAndSync();
 
         logger.info("Write another 10 records");
 
@@ -222,8 +222,8 @@ public class TestBKSyncLogReader extends TestDistributedLogBase {
             LogRecord record = DLMTestUtil.getLogRecordInstance(i);
             out.write(record);
         }
-        out.flush();
-        out.commit();
+        out.setReadyToFlush();
+        out.flushAndSync();
 
         logger.info("Write first 10 records");
 
@@ -263,8 +263,8 @@ public class TestBKSyncLogReader extends TestDistributedLogBase {
             LogRecord record = DLMTestUtil.getLogRecordInstance(i);
             out.write(record);
         }
-        out.flush();
-        out.commit();
+        out.setReadyToFlush();
+        out.flushAndSync();
         final AtomicLong nextTxId = new AtomicLong(11L);
 
         logger.info("Write first 10 records");

@@ -53,7 +53,7 @@ public class WriteOp extends AbstractWriteOp implements WriteOpWithPayload {
 
     private static final Logger logger = LoggerFactory.getLogger(WriteOp.class);
 
-    private final ByteBuffer payload;
+    private final byte[] payload;
     private final boolean isRecordSet;
 
     // Stats
@@ -80,7 +80,8 @@ public class WriteOp extends AbstractWriteOp implements WriteOpWithPayload {
                    Feature checksumDisabledFeature,
                    AccessControlManager accessControlManager) {
         super(stream, requestStat(statsLogger, "write"), checksum, checksumDisabledFeature);
-        this.payload = data;
+        payload = new byte[data.remaining()];
+        data.get(payload);
         this.isRecordSet = isRecordSet;
 
         final Partition partition = streamPartitionConverter.convert(stream);
@@ -101,31 +102,28 @@ public class WriteOp extends AbstractWriteOp implements WriteOpWithPayload {
             @Override
             public void onSuccess(WriteResponse response) {
                 if (response.getHeader().getCode() == StatusCode.SUCCESS) {
-                    latencyStat.registerSuccessfulEvent(
-                      stopwatch().elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+                    latencyStat.registerSuccessfulEvent(stopwatch().elapsed(TimeUnit.MICROSECONDS));
                     bytes.add(size);
                     writeBytes.add(size);
                 } else {
-                    latencyStat.registerFailedEvent(
-                      stopwatch().elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+                    latencyStat.registerFailedEvent(stopwatch().elapsed(TimeUnit.MICROSECONDS));
                 }
             }
             @Override
             public void onFailure(Throwable cause) {
-                latencyStat.registerFailedEvent(
-                  stopwatch().elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+                latencyStat.registerFailedEvent(stopwatch().elapsed(TimeUnit.MICROSECONDS));
             }
         });
     }
 
     @Override
     public long getPayloadSize() {
-      return payload.remaining();
+      return payload.length;
     }
 
     @Override
     public Long computeChecksum() {
-        return ProtocolUtils.writeOpCRC32(stream, payload.duplicate());
+        return ProtocolUtils.writeOpCRC32(stream, payload);
     }
 
     @Override

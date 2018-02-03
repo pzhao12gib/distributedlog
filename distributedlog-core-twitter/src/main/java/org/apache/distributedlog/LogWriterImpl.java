@@ -50,12 +50,12 @@ class LogWriterImpl implements LogWriter {
 
     @Override
     public long setReadyToFlush() throws IOException {
-        return impl.flush();
+        return impl.setReadyToFlush();
     }
 
     @Override
     public long flushAndSync() throws IOException {
-        return impl.commit();
+        return impl.flushAndSync();
     }
 
     @Override

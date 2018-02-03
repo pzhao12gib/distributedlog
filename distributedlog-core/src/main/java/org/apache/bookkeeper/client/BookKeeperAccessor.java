@@ -21,7 +21,7 @@ import org.apache.bookkeeper.meta.LedgerManager;
 import org.apache.bookkeeper.proto.BookkeeperInternalCallbacks;
 
 /**
- * Accessor to protected methods in bookkeeper.
+ * Accessor to protected methods in bookkeeper
  */
 public class BookKeeperAccessor {
 

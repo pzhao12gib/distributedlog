@@ -362,15 +362,6 @@ class BKLogWriteHandler extends BKLogHandler {
     }
 
     /**
-     * Delete the whole log and all log segments under the log
-     */
-    void deleteLog() throws IOException {
-        lock.checkOwnershipAndReacquire();
-        Utils.ioResult(purgeLogSegmentsOlderThanTxnId(-1));
-        Utils.closeQuietly(lock);
-    }
-
-    /**
      * The caller could call this before any actions, which to hold the lock for
      * the write handler of its whole lifecycle. The lock will only be released
      * when closing the write handler.
@@ -439,11 +430,9 @@ class BKLogWriteHandler extends BKLogHandler {
             return writer;
         } finally {
             if (success) {
-                openOpStats.registerSuccessfulEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+                openOpStats.registerSuccessfulEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             } else {
-                openOpStats.registerFailedEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS), TimeUnit.MICROSECONDS);
+                openOpStats.registerFailedEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             }
         }
     }
@@ -754,13 +743,9 @@ class BKLogWriteHandler extends BKLogHandler {
             return completedLogSegment;
         } finally {
             if (success) {
-                closeOpStats.registerSuccessfulEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS),
-                    TimeUnit.MICROSECONDS);
+                closeOpStats.registerSuccessfulEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             } else {
-                closeOpStats.registerFailedEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS),
-                    TimeUnit.MICROSECONDS);
+                closeOpStats.registerFailedEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             }
         }
     }
@@ -1211,16 +1196,12 @@ class BKLogWriteHandler extends BKLogHandler {
         promise.whenComplete(new FutureEventListener<LogSegmentMetadata>() {
             @Override
             public void onSuccess(LogSegmentMetadata segment) {
-                deleteOpStats.registerSuccessfulEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS),
-                    TimeUnit.MICROSECONDS);
+                deleteOpStats.registerSuccessfulEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             }
 
             @Override
             public void onFailure(Throwable cause) {
-                deleteOpStats.registerFailedEvent(
-                    stopwatch.stop().elapsed(TimeUnit.MICROSECONDS),
-                    TimeUnit.MICROSECONDS);
+                deleteOpStats.registerFailedEvent(stopwatch.stop().elapsed(TimeUnit.MICROSECONDS));
             }
         });
         entryStore.deleteLogSegment(ledgerMetadata)

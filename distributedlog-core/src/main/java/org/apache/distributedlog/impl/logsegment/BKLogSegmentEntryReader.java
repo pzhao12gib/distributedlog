@@ -17,22 +17,9 @@
  */
 package org.apache.distributedlog.impl.logsegment;
 
-import static com.google.common.base.Charsets.UTF_8;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Enumeration;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CopyOnWriteArraySet;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.distributedlog.DistributedLogConfiguration;
 import org.apache.distributedlog.Entry;
 import org.apache.distributedlog.LogSegmentMetadata;
@@ -54,6 +41,20 @@ import org.apache.bookkeeper.stats.Counter;
 import org.apache.bookkeeper.stats.StatsLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArraySet;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static com.google.common.base.Charsets.UTF_8;
 
 /**
  * BookKeeper ledger based log segment entry reader.
@@ -85,24 +86,7 @@ public class BKLogSegmentEntryReader implements Runnable, LogSegmentEntryReader,
             return done;
         }
 
-        synchronized void release() {
-            if (null != this.entry) {
-                this.entry.getEntryBuffer().release();
-                this.entry = null;
-            }
-        }
-
-        void release(LedgerEntry entry) {
-            if (null != entry) {
-                entry.getEntryBuffer().release();
-            }
-        }
-
         void complete(LedgerEntry entry) {
-            // the reader is already closed
-            if (isClosed()) {
-                release(entry);
-            }
             synchronized (this) {
                 if (done) {
                     return;
@@ -135,8 +119,6 @@ public class BKLogSegmentEntryReader implements Runnable, LogSegmentEntryReader,
         }
 
         synchronized LedgerEntry getEntry() {
-            // retain reference for the caller
-            this.entry.getEntryBuffer().retain();
             return this.entry;
         }
 
@@ -531,16 +513,6 @@ public class BKLogSegmentEntryReader implements Runnable, LogSegmentEntryReader,
         }
     }
 
-    private void releaseAllCachedEntries() {
-        synchronized (this) {
-            CacheEntry entry = readAheadEntries.poll();
-            while (null != entry) {
-                entry.release();
-                entry = readAheadEntries.poll();
-            }
-        }
-    }
-
     //
     // Background Read Operations
     //
@@ -652,7 +624,7 @@ public class BKLogSegmentEntryReader implements Runnable, LogSegmentEntryReader,
                 .setEntryId(entry.getEntryId())
                 .setEnvelopeEntry(envelopeEntries)
                 .deserializeRecordSet(deserializeRecordSet)
-                .setEntry(entry.getEntryBuffer())
+                .setInputStream(entry.getEntryInputStream())
                 .buildReader();
     }
 
@@ -775,28 +747,22 @@ public class BKLogSegmentEntryReader implements Runnable, LogSegmentEntryReader,
             }
             if (entry.isSuccess()) {
                 CacheEntry removedEntry = readAheadEntries.poll();
-                try {
-                    if (entry != removedEntry) {
-                        DLIllegalStateException ise = new DLIllegalStateException("Unexpected condition at reading from "
+                if (entry != removedEntry) {
+                    DLIllegalStateException ise = new DLIllegalStateException("Unexpected condition at reading from "
                             + getSegment());
-                        completeExceptionally(ise, false);
-                        return;
-                    }
-                    try {
-                        // the reference is retained on `entry.getEntry()`. Entry.Reader is responsible for releasing it.
-                        nextRequest.addEntry(processReadEntry(entry.getEntry()));
-                    } catch (IOException e) {
-                        completeExceptionally(e, false);
-                        return;
-                    }
-                } finally {
-                    removedEntry.release();
+                    completeExceptionally(ise, false);
+                    return;
+                }
+                try {
+                    nextRequest.addEntry(processReadEntry(entry.getEntry()));
+                } catch (IOException e) {
+                    completeExceptionally(e, false);
+                    return;
                 }
             } else if (skipBrokenEntries && BKException.Code.DigestMatchException == entry.getRc()) {
                 // skip this entry and move forward
                 skippedBrokenEntriesCounter.inc();
-                CacheEntry removedEntry = readAheadEntries.poll();
-                removedEntry.release();
+                readAheadEntries.poll();
                 continue;
             } else {
                 completeExceptionally(new BKTransmitException("Encountered issue on reading entry " + entry.getEntryId()
@@ -859,9 +825,6 @@ public class BKLogSegmentEntryReader implements Runnable, LogSegmentEntryReader,
             exception = new ReadCancelledException(getSegment().getZNodeName(), "Reader was closed");
             completeExceptionally(exception, false);
         }
-
-        // release the cached entries
-        releaseAllCachedEntries();
 
         // cancel all pending reads
         cancelAllPendingReads(exception);

@@ -17,18 +17,9 @@
  */
 package org.apache.distributedlog;
 
-import static org.apache.distributedlog.namespace.NamespaceDriver.Role.READER;
-import static org.apache.distributedlog.namespace.NamespaceDriver.Role.WRITER;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
-import java.io.IOException;
-import java.net.URI;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
@@ -71,6 +62,16 @@ import org.apache.distributedlog.util.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
+import java.net.URI;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+
+import static org.apache.distributedlog.namespace.NamespaceDriver.Role.READER;
+import static org.apache.distributedlog.namespace.NamespaceDriver.Role.WRITER;
+
 /**
  * <h3>Metrics</h3>
  * <ul>
@@ -78,6 +79,10 @@ import org.slf4j.LoggerFactory;
  * See {@link BKAsyncLogWriter} for detail stats.
  * <li> `async_reader/*`: all asyncrhonous reader related metrics are exposed under scope `async_reader`.
  * See {@link BKAsyncLogReader} for detail stats.
+ * <li> `writer_future_pool/*`: metrics about the future pools that used by writers are exposed under
+ * scope `writer_future_pool`. See {@link MonitoredFuturePool} for detail stats.
+ * <li> `reader_future_pool/*`: metrics about the future pools that used by readers are exposed under
+ * scope `reader_future_pool`. See {@link MonitoredFuturePool} for detail stats.
  * <li> `lock/*`: metrics about the locks used by writers. See {@link ZKDistributedLock} for detail
  * stats.
  * <li> `read_lock/*`: metrics about the locks used by readers. See {@link ZKDistributedLock} for
@@ -471,11 +476,6 @@ class BKDistributedLogManager implements DistributedLogManager {
      */
     @Override
     public BKSyncLogWriter startLogSegmentNonPartitioned() throws IOException {
-        return openLogWriter();
-    }
-
-    @Override
-    public BKSyncLogWriter openLogWriter() throws IOException {
         checkClosedOrInError("startLogSegmentNonPartitioned");
         BKSyncLogWriter writer = new BKSyncLogWriter(conf, dynConf, this);
         boolean success = false;
@@ -606,25 +606,14 @@ class BKDistributedLogManager implements DistributedLogManager {
      * @throws IOException if a stream cannot be found.
      */
     @Override
-    public LogReader openLogReader(long fromTxnId)
+    public LogReader getInputStream(long fromTxnId)
         throws IOException {
         return getInputStreamInternal(fromTxnId);
     }
 
     @Override
-    public LogReader openLogReader(DLSN fromDLSN) throws IOException {
-        return getInputStreamInternal(fromDLSN, Optional.<Long>absent());
-    }
-
-    @Override
-    public LogReader getInputStream(long fromTxnId)
-        throws IOException {
-        return openLogReader(fromTxnId);
-    }
-
-    @Override
     public LogReader getInputStream(DLSN fromDLSN) throws IOException {
-        return openLogReader(fromDLSN);
+        return getInputStreamInternal(fromDLSN, Optional.<Long>absent());
     }
 
     @Override
@@ -961,10 +950,6 @@ class BKDistributedLogManager implements DistributedLogManager {
      */
     @Override
     public void delete() throws IOException {
-        // delete the actual log stream and log segments
-        BKLogWriteHandler ledgerHandler = createWriteHandler(true);
-        ledgerHandler.deleteLog();
-        // delete the log stream metadata
         Utils.ioResult(driver.getLogStreamMetadataStore(WRITER)
                 .deleteLog(uri, getStreamName()));
     }

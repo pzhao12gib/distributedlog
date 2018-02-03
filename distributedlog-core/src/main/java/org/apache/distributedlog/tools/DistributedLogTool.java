@@ -17,13 +17,13 @@
  */
 package org.apache.distributedlog.tools;
 
-import io.netty.buffer.ByteBuf;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
@@ -46,6 +46,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
@@ -1664,7 +1665,7 @@ public class DistributedLogTool extends Tool {
                 System.out.println("Skip inprogress log segment " + segment);
                 return;
             }
-            LedgerHandle lh = bkAdmin.openLedger(segment.getLogSegmentId());
+            LedgerHandle lh = bkAdmin.openLedger(segment.getLogSegmentId(), true);
             long lac = lh.getLastAddConfirmed();
             Enumeration<LedgerEntry> entries = lh.readEntries(lac, lac);
             if (!entries.hasMoreElements()) {
@@ -1675,9 +1676,8 @@ public class DistributedLogTool extends Tool {
                     .setLogSegmentInfo(segment.getLogSegmentSequenceNumber(), segment.getStartSequenceId())
                     .setEntryId(lastEntry.getEntryId())
                     .setEnvelopeEntry(LogSegmentMetadata.supportsEnvelopedEntries(segment.getVersion()))
-                    .setEntry(lastEntry.getEntryBuffer())
+                    .setInputStream(lastEntry.getEntryInputStream())
                     .buildReader();
-            lastEntry.getEntryBuffer().release();
             LogRecordWithDLSN record = reader.nextRecord();
             LogRecordWithDLSN lastRecord = null;
             while (null != record) {
@@ -1727,7 +1727,6 @@ public class DistributedLogTool extends Tool {
         abstract protected int runBKCmd(ZooKeeperClient zkc, BookKeeperClient bkc) throws Exception;
     }
 
-    /**
     static class RecoverCommand extends PerBKCommand {
 
         final List<Long> ledgers = new ArrayList<Long>();
@@ -2036,7 +2035,6 @@ public class DistributedLogTool extends Tool {
             return "recover [options] <bookiesSrc>";
         }
     }
-    **/
 
     /**
      * Per Ledger Command, which parse common options for per ledger. e.g. ledger id.
@@ -2245,22 +2243,26 @@ public class DistributedLogTool extends Tool {
                 throws Exception {
             for (long eid = fromEntryId; eid <= untilEntryId; ++eid) {
                 final CountDownLatch doneLatch = new CountDownLatch(1);
-                final AtomicReference<Set<LedgerReader.ReadResult<ByteBuf>>> resultHolder = new AtomicReference<>();
-                ledgerReader.readEntriesFromAllBookies(lh, eid, (rc, readResults) -> {
-                    if (BKException.Code.OK == rc) {
-                        resultHolder.set(readResults);
-                    } else {
-                        resultHolder.set(null);
+                final AtomicReference<Set<LedgerReader.ReadResult<InputStream>>> resultHolder =
+                        new AtomicReference<Set<LedgerReader.ReadResult<InputStream>>>();
+                ledgerReader.readEntriesFromAllBookies(lh, eid, new BookkeeperInternalCallbacks.GenericCallback<Set<LedgerReader.ReadResult<InputStream>>>() {
+                    @Override
+                    public void operationComplete(int rc, Set<LedgerReader.ReadResult<InputStream>> readResults) {
+                        if (BKException.Code.OK == rc) {
+                            resultHolder.set(readResults);
+                        } else {
+                            resultHolder.set(null);
+                        }
+                        doneLatch.countDown();
                     }
-                    doneLatch.countDown();
                 });
                 doneLatch.await();
-                Set<LedgerReader.ReadResult<ByteBuf>> readResults = resultHolder.get();
+                Set<LedgerReader.ReadResult<InputStream>> readResults = resultHolder.get();
                 if (null == readResults) {
                     throw new IOException("Failed to read entry " + eid);
                 }
                 boolean printHeader = true;
-                for (LedgerReader.ReadResult<ByteBuf> rr : readResults) {
+                for (LedgerReader.ReadResult<InputStream> rr : readResults) {
                     if (corruptOnly) {
                         if (BKException.Code.DigestMatchException == rr.getResultCode()) {
                             if (printHeader) {
@@ -2283,10 +2285,9 @@ public class DistributedLogTool extends Tool {
                             Entry.Reader reader = Entry.newBuilder()
                                     .setLogSegmentInfo(lh.getId(), 0L)
                                     .setEntryId(eid)
-                                    .setEntry(rr.getValue())
+                                    .setInputStream(rr.getValue())
                                     .setEnvelopeEntry(LogSegmentMetadata.supportsEnvelopedEntries(metadataVersion))
                                     .buildReader();
-                            rr.getValue().release();
                             printEntry(reader);
                         } else {
                             System.out.println("status = " + BKException.getMessage(rr.getResultCode()));
@@ -2343,10 +2344,9 @@ public class DistributedLogTool extends Tool {
                 Entry.Reader reader = Entry.newBuilder()
                         .setLogSegmentInfo(0L, 0L)
                         .setEntryId(entry.getEntryId())
-                        .setEntry(entry.getEntryBuffer())
+                        .setInputStream(entry.getEntryInputStream())
                         .setEnvelopeEntry(LogSegmentMetadata.supportsEnvelopedEntries(metadataVersion))
                         .buildReader();
-                entry.getEntryBuffer().release();
                 printEntry(reader);
                 ++i;
             }
@@ -2854,8 +2854,7 @@ public class DistributedLogTool extends Tool {
         addCommand(new ListCommand());
         addCommand(new ReadLastConfirmedCommand());
         addCommand(new ReadEntriesCommand());
-        // TODO: Fix it later, tracking by https://github.com/apache/distributedlog/issues/150
-        // addCommand(new RecoverCommand());
+        addCommand(new RecoverCommand());
         addCommand(new RecoverLedgerCommand());
         addCommand(new ShowCommand());
         addCommand(new TruncateCommand());

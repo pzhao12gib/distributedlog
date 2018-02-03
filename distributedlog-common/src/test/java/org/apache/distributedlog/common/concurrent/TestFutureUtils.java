@@ -312,8 +312,7 @@ public class TestFutureUtils {
             Stopwatch.createStarted());
         underlyFuture.complete(1234L);
         FutureUtils.result(statsFuture);
-        verify(statsLogger, times(1))
-            .registerSuccessfulEvent(anyLong(), eq(TimeUnit.MICROSECONDS));
+        verify(statsLogger, times(1)).registerSuccessfulEvent(anyLong());
     }
 
     @Test
@@ -326,8 +325,7 @@ public class TestFutureUtils {
             Stopwatch.createStarted());
         underlyFuture.completeExceptionally(new TestException());
         FutureUtils.result(FutureUtils.ignore(statsFuture));
-        verify(statsLogger, times(1))
-            .registerFailedEvent(anyLong(), eq(TimeUnit.MICROSECONDS));
+        verify(statsLogger, times(1)).registerFailedEvent(anyLong());
     }
 
     @Test

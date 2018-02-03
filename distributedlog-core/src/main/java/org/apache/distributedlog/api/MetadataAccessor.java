@@ -17,20 +17,11 @@
  */
 package org.apache.distributedlog.api;
 
-import java.io.Closeable;
-import java.io.IOException;
-import org.apache.bookkeeper.common.annotation.InterfaceAudience.LimitedPrivate;
-import org.apache.bookkeeper.common.annotation.InterfaceStability.Evolving;
 import org.apache.distributedlog.io.AsyncCloseable;
 
-/**
- * Provide a metadata accessor to access customized metadata associated with logs.
- *
- * @Deprecated this class is here for legacy reason. It is not recommended to use this class for storing customized
- *             metadata.
- */
-@LimitedPrivate
-@Evolving
+import java.io.Closeable;
+import java.io.IOException;
+
 public interface MetadataAccessor extends Closeable, AsyncCloseable {
     /**
      * Get the name of the stream managed by this log manager

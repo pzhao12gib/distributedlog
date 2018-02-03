@@ -28,13 +28,11 @@ matrix:
     os: osx
     osx_image: xcode8
 script:
-- touch NOW
+- touch /tmp/NOW
 - echo GIBSTUDYSTART $(date)
 - travis_retry ./scripts/change-scala-version.sh $SCALA_VERSION
 - travis_retry mvn --batch-mode clean apache-rat:check
 - travis_wait 60 mvn --batch-mode clean package findbugs:check
 - echo GIBSTUDYEND $(date)
 - cd $TRAVIS_BUILD_DIR
-- if [ "$TRAVIS_OS_NAME" == "osx" ];        then echo TESTNUM $(find . -name TEST-*.xml
-  -newer NOW | wc -l);        else echo TESTNUM $(find -name TEST-*.xml -newer NOW
-  | wc -l);        fi
+- echo TESTNUM $(find . -name TEST-*.xml -newer /tmp/NOW | wc -l)

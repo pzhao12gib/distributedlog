@@ -83,7 +83,7 @@ public class SimplePermitLimiter implements PermitLimiter {
 
     @Override
     public boolean acquire() {
-        permitsMetric.registerSuccessfulValue(permits.get());
+        permitsMetric.registerSuccessfulEvent(permits.get());
         if (permits.incrementAndGet() <= permitsMax || isDarkmode()) {
             return true;
         } else {
